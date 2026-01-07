@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Test files
+test_backend.html
+*.sql
+create_*.sql
+NEW_MAIN_PY.txt

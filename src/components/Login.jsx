@@ -148,6 +148,7 @@ const Login = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        localStorage.clear();
 
         // Validation
         if (!formData.email || !formData.password) {
@@ -203,7 +204,7 @@ const Login = () => {
                 localStorage.setItem('authToken', data.access_token);
                 console.log('🔑 Token stored:', data.access_token.substring(0, 20) + '...');
             }
-
+ 
             if (data.user) {
                 // Store complete user object
                 localStorage.setItem('currentUser', JSON.stringify(data.user));
@@ -212,7 +213,6 @@ const Login = () => {
                 localStorage.setItem('userFullName', data.user.full_name);
                 console.log('👤 User data stored:', data.user);
             }
-
             // Auto-create API key if not exists
             try {
                 let apiKey = localStorage.getItem('apiKey');

@@ -31,7 +31,9 @@ import {
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
     Key as KeyIcon,
+    ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
 import { apiKeyAPI } from '../services/api';
 
@@ -95,6 +97,7 @@ const EmptyState = styled(Box)(({ theme }) => ({
 }));
 
 const APIKeysManagement = () => {
+    const navigate = useNavigate();
     const [apiKeys, setApiKeys] = useState([]);
     const [loading, setLoading] = useState(true);
     const [createDialog, setCreateDialog] = useState(false);
@@ -228,6 +231,13 @@ const APIKeysManagement = () => {
     return (
         <PageContainer>
             <Container maxWidth="lg">
+                <Button
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => navigate('/dashboard')}
+                    sx={{ mb: 2, textTransform: 'none', color: '#757575' }}
+                >
+                    Back to Dashboard
+                </Button>
                 <Header>
                     <Box>
                         <Title>API Keys</Title>

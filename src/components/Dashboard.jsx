@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -15,7 +15,10 @@ import {
     ToggleButtonGroup,
     Snackbar,
     Alert,
+    Chip,
+    CircularProgress,
 } from '@mui/material';
+
 import {
     Folder as FolderIcon,
     Logout as LogoutIcon,
@@ -29,6 +32,8 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
+
 
 // Styled components
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
@@ -209,11 +214,55 @@ const Dashboard = () => {
     });
     const [openSnackbar, setOpenSnackbar] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [apiKey, setApiKey] = useState(null);
+    const [apiKeyName, setApiKeyName] = useState('Loading...');
+    const [projects, setProjects] = useState([]);
+    const [loadingProjects, setLoadingProjects] = useState(true);
 
-    // Get user from localStorage or use default
-    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{"name": "PrasannaKumarTR"}');
-    const apiKey = localStorage.getItem('apiKey');
-    const apiKeyName = localStorage.getItem('apiKeyName') || 'Auto-generated on Login';
+
+    // Get user from localStorage with proper field mapping
+    const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const currentUser = {
+        name: storedUser.full_name || storedUser.name || storedUser.email?.split('@')[0] || 'User',
+        email: storedUser.email || '',
+        user_id: storedUser.user_id || storedUser.id || ''
+    };
+
+    // Fetch API keys on mount
+    const fetchProjects = async () => {
+        try {
+            setLoadingProjects(true);
+            const data = await api.projects.getAll();
+            setProjects(data || []);
+        } catch (error) {
+            console.error('Error fetching projects:', error);
+        } finally {
+            setLoadingProjects(false);
+        }
+    };
+
+    const fetchApiKey = async () => {
+        try {
+            const keys = await api.apiKeys.list();
+            if (keys && keys.length > 0) {
+                setApiKey(keys[0].api_key);
+                setApiKeyName(keys[0].name || 'Primary API Key');
+            }
+        } catch (error) {
+            console.error('Error fetching API keys:', error);
+        }
+    };
+
+    // Fetch on mount
+    useEffect(() => {
+        if (currentUser.user_id) {
+            // fetchApiKey();
+        }
+        fetchProjects();
+    }, []);
+
+
+
 
     const handleCopyApiKey = () => {
         if (apiKey) {
@@ -239,48 +288,72 @@ const Dashboard = () => {
         }
     };
 
-    const handleCreateProject = () => {
+    const handleCreateProject = async () => {
         if (!formData.projectName.trim()) {
             setSnackbarMessage('❌ Please enter a project name');
             setOpenSnackbar(true);
             return;
         }
 
-        // Create project object
-        const newProject = {
-            id: formData.projectName.substring(0, 3).toUpperCase(),
-            name: formData.projectName,
-            description: formData.description || 'No description',
-            platform: formData.platform === 'uipath' ? 'UiPath' : 'Blue Prism',
-            workflows: 0,
-            createdAt: new Date().toISOString(),
-        };
+        try {
+            const projectData = {
+                name: formData.projectName,
+                description: formData.description || 'No description',
+                platform: formData.platform === 'uipath' ? 'UiPath' : 'Blue Prism',
+            };
 
-        // Store project in localStorage
-        const existingProjects = JSON.parse(localStorage.getItem('projects') || '[]');
-        localStorage.setItem('projects', JSON.stringify([...existingProjects, newProject]));
-        localStorage.setItem('currentProject', JSON.stringify(newProject));
+            console.log('🚀 Creating project in DB:', projectData);
+            const response = await api.projects.create(projectData);
 
-        console.log('🚀 Creating project:', newProject);
-        setSnackbarMessage('✅ Project created successfully! Redirecting to workspace...');
-        setOpenSnackbar(true);
+            setSnackbarMessage('✅ Project created successfully in database!');
+            setOpenSnackbar(true);
 
-        // Navigate to workspace after 1.5 seconds
-        setTimeout(() => {
-            navigate('/workspace');
-        }, 1500);
+            // Refresh project list
+            fetchProjects();
+
+            // Store the active project info for the current session workspace
+            localStorage.setItem('currentProject', JSON.stringify(response));
+
+            // Optional: Auto navigate or let user stay
+            setTimeout(() => {
+                navigate('/workspace');
+            }, 1000);
+
+        } catch (error) {
+            console.error('❌ Error creating project:', error);
+            setSnackbarMessage(`❌ Failed to create project: ${error.message || 'Unknown error'}`);
+            setOpenSnackbar(true);
+        }
     };
 
+
     const handleLogout = () => {
-        localStorage.removeItem('currentUser');
-        console.log('👋 User logged out');
+        console.log('👋 User logging out');
+
+        // Clear all session data. Data is persisted in PostgreSQL, so no need to preserve projects/workflows locally.
+        localStorage.clear();
+
         navigate('/');
     };
 
+
     const handleFeatureClick = (feature) => {
         console.log(`🎯 Clicked feature: ${feature}`);
-        setSnackbarMessage(`🚀 ${feature} feature coming soon!`);
-        setOpenSnackbar(true);
+
+        switch (feature) {
+            case 'Workflow Analysis':
+                navigate('/workflow-analyzer');
+                break;
+            case 'Code Review':
+                navigate('/code-review');
+                break;
+            case 'UiPath to BluePrism Converter':
+                navigate('/uipath-to-blueprism');
+                break;
+            default:
+                setSnackbarMessage(`🚀 ${feature} feature coming soon!`);
+                setOpenSnackbar(true);
+        }
     };
 
     return (
@@ -294,13 +367,25 @@ const Dashboard = () => {
                     </Box>
 
                     <UserSection>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Button
+                            onClick={() => navigate('/')}
+                            sx={{
+                                color: '#757575',
+                                textTransform: 'none',
+                                fontWeight: 500,
+                                mr: 1,
+                                '&:hover': { background: 'rgba(0,0,0,0.04)' }
+                            }}
+                        >
+                            Home
+                        </Button>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 2 }}>
                             <PersonIcon sx={{ color: '#757575', fontSize: 20 }} />
                             <Typography
                                 sx={{
                                     color: '#212121',
-                                    fontWeight: 500,
-                                    display: { xs: 'none', sm: 'block' },
+                                    fontWeight: 600,
+                                    fontSize: '0.95rem'
                                 }}
                             >
                                 {currentUser.name}
@@ -534,6 +619,68 @@ const Dashboard = () => {
                         </Box>
                     </CardContent>
                 </ProjectFormCard>
+
+                {/* Existing Projects Section */}
+                {projects.length > 0 && (
+                    <Box sx={{ mt: 8 }}>
+                        <Typography variant="h5" sx={{ fontWeight: 700, mb: 4, textAlign: 'center' }}>
+                            Your Projects
+                        </Typography>
+                        <Box sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                            gap: 3
+                        }}>
+                            {projects.map((project) => (
+                                <Card
+                                    key={project.project_id}
+                                    sx={{
+                                        p: 3,
+                                        borderRadius: '12px',
+                                        cursor: 'pointer',
+                                        border: '1px solid #f0f0f0',
+                                        transition: 'all 0.2s',
+                                        '&:hover': {
+                                            transform: 'translateY(-4px)',
+                                            boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+                                            borderColor: '#5e6ff2'
+                                        }
+                                    }}
+                                    onClick={() => {
+                                        localStorage.setItem('currentProject', JSON.stringify(project));
+                                        localStorage.setItem('activeProjectId', project.project_id);
+                                        navigate('/workspace');
+                                    }}
+                                >
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                                        <FolderIcon sx={{ color: project.platform === 'UiPath' ? '#9d4edd' : '#5e6ff2' }} />
+                                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                            {project.name}
+                                        </Typography>
+                                    </Box>
+                                    <Typography variant="body2" sx={{ color: '#757575', mb: 2, height: '40px', overflow: 'hidden' }}>
+                                        {project.description}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Chip
+                                            label={project.platform}
+                                            size="small"
+                                            sx={{
+                                                background: project.platform === 'UiPath' ? 'rgba(157, 78, 221, 0.1)' : 'rgba(94, 111, 242, 0.1)',
+                                                color: project.platform === 'UiPath' ? '#9d4edd' : '#5e6ff2',
+                                                fontWeight: 600
+                                            }}
+                                        />
+                                        <Typography sx={{ fontSize: '12px', color: '#9e9e9e' }}>
+                                            {project.workflows || 0} Workflows
+                                        </Typography>
+                                    </Box>
+                                </Card>
+                            ))}
+                        </Box>
+                    </Box>
+                )}
+
 
                 {/* Feature Cards */}
                 <Box

@@ -21,6 +21,7 @@ import {
     CreditCard as CardIcon,
     Cancel as CancelIcon,
     Upgrade as UpgradeIcon,
+    ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
@@ -234,6 +235,13 @@ const MySubscription = () => {
     return (
         <PageContainer>
             <Container maxWidth="lg">
+                <Button
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => navigate('/dashboard')}
+                    sx={{ mb: 2, textTransform: 'none', color: '#757575' }}
+                >
+                    Back to Dashboard
+                </Button>
                 <Header>
                     <Title>My Subscription</Title>
                     <Typography sx={{ color: '#757575', fontSize: '16px' }}>

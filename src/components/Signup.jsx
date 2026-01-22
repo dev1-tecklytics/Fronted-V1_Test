@@ -216,7 +216,9 @@ const Signup = () => {
 
             // Store token and user data
             if (data.access_token) {
+                const apiKey = data.api_key_prefix + " : " + data.api_key_hash;
                 localStorage.setItem('authToken', data.access_token);
+                localStorage.setItem('apiKey', apiKey);
                 console.log('🔑 Token stored');
             }
             localStorage.setItem('currentUser', JSON.stringify(data.user || data));

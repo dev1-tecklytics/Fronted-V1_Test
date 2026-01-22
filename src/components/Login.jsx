@@ -201,10 +201,12 @@ const Login = () => {
             // Store token and user data from backend response
             // Backend returns: { access_token, token_type, user: { email, full_name, user_id } }
             if (data.access_token) {
+                const apiKey = data.api_key_prefix + " : " + data.api_key_hash;
                 localStorage.setItem('authToken', data.access_token);
+                localStorage.setItem('apiKey', apiKey);
                 console.log('🔑 Token stored:', data.access_token.substring(0, 20) + '...');
             }
- 
+
             if (data.user) {
                 // Store complete user object
                 localStorage.setItem('currentUser', JSON.stringify(data.user));
@@ -213,24 +215,9 @@ const Login = () => {
                 localStorage.setItem('userFullName', data.user.full_name);
                 console.log('👤 User data stored:', data.user);
             }
-            // Auto-create API key if not exists
-            try {
-                let apiKey = localStorage.getItem('apiKey');
+            // API Key management is now handled by the backend dual-auth system.
+            // No need to create a new key on every login anymore.
 
-                if (!apiKey) {
-                    console.log('🔑 No API key found. Creating one...');
-                    const keyResponse = await apiKeyAPI.create('Auto-generated on Login');
-                    apiKey = keyResponse.api_key;
-                    localStorage.setItem('apiKey', apiKey);
-                    localStorage.setItem('apiKeyName', keyResponse.name || 'Auto-generated on Login');
-                    console.log('✅ API key created and stored');
-                } else {
-                    console.log('✅ API key already exists');
-                }
-            } catch (keyError) {
-                console.warn('⚠️ Could not create API key:', keyError);
-                // Don't block login if API key creation fails
-            }
 
             setSnackbarMessage(`✅ Welcome back, ${data.user?.full_name || data.user?.email || 'User'}!`);
             setSnackbarSeverity('success');

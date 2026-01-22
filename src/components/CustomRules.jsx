@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Container,
@@ -23,9 +23,14 @@ import {
     FileUpload as ImportIcon,
     FileDownload as ExportIcon,
     Close as CloseIcon,
+    Delete as DeleteIcon,
 } from '@mui/icons-material';
+import { CircularProgress, Chip } from '@mui/material';
+
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
+import { rulesAPI } from '../services/api';
+
 
 const PageContainer = styled(Box)(({ theme }) => ({
     minHeight: '100vh',
@@ -131,57 +136,111 @@ const CustomRules = () => {
     const [platformFilter, setPlatformFilter] = useState('All Platforms');
     const [statusFilter, setStatusFilter] = useState('All Status');
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
-    const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [rules, setRules] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     // Form state for Create Rule
     const [ruleForm, setRuleForm] = useState({
-        ruleName: '',
+        rule_name: '',
         category: '',
         severity: '',
         platform: '',
-        checkType: '',
+        check_type: '',
         description: '',
         recommendation: '',
-        checkPattern: '',
+        check_pattern: '',
     });
+
+    useEffect(() => {
+        loadRules();
+    }, []);
+
+    const loadRules = async () => {
+        try {
+            setLoading(true);
+            // Verify rulesAPI exists before calling
+            if (!rulesAPI || !rulesAPI.getAll) {
+                console.error('rulesAPI is not defined or missing getAll method');
+                setRules([]);
+                return;
+            }
+
+            const data = await rulesAPI.getAll();
+            // Ensure data is an array before setting
+            if (Array.isArray(data)) {
+                setRules(data);
+            } else {
+                console.warn('Received non-array data for rules:', data);
+                setRules([]);
+            }
+        } catch (error) {
+            console.error('Failed to load rules:', error);
+            setRules([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
     // Import JSON state
     const [jsonData, setJsonData] = useState('');
     const [overwriteRules, setOverwriteRules] = useState(false);
 
+    // Safeguard stats calculation against non-array rules
+    const activeRules = Array.isArray(rules) ? rules : [];
+
     const stats = {
-        total: 0,
-        totalActive: 0,
-        totalInactive: 0,
-        critical: 0,
-        criticalIssues: 'High priority issues',
-        uipath: 0,
+        total: activeRules.length,
+        totalActive: activeRules.filter(r => r.is_active).length,
+        totalInactive: activeRules.filter(r => !r.is_active).length,
+        critical: activeRules.filter(r => r.severity === 'Critical').length,
+        criticalIssues: 'High priority rules',
+        uipath: activeRules.filter(r => r.platform === 'UiPath' || r.platform === 'Both').length,
         uipathSpecific: 'Platform-specific',
-        blueprism: 0,
+        blueprism: activeRules.filter(r => r.platform === 'BluePrism' || r.platform === 'Both').length,
         blueprismSpecific: 'Platform-specific',
     };
 
-    const handleCreateRule = () => {
+
+    const handleCreateRule = async () => {
         console.log('Creating rule:', ruleForm);
         // Validate form
-        if (!ruleForm.ruleName || !ruleForm.category || !ruleForm.severity) {
+        if (!ruleForm.rule_name || !ruleForm.category || !ruleForm.severity) {
             alert('Please fill in all required fields');
             return;
         }
-        alert('Rule created successfully!');
-        setCreateDialogOpen(false);
-        // Reset form
-        setRuleForm({
-            ruleName: '',
-            category: '',
-            severity: '',
-            platform: '',
-            checkType: '',
-            description: '',
-            recommendation: '',
-            checkPattern: '',
-        });
+
+        try {
+            await rulesAPI.create(ruleForm);
+            alert('Rule created successfully!');
+            setCreateDialogOpen(false);
+            loadRules(); // Reload from DB
+            // Reset form
+            setRuleForm({
+                rule_name: '',
+                category: '',
+                severity: '',
+                platform: '',
+                check_type: '',
+                description: '',
+                recommendation: '',
+                check_pattern: '',
+            });
+        } catch (error) {
+            alert('Failed to create rule: ' + error.message);
+        }
     };
+
+    const handleDeleteRule = async (ruleId) => {
+        if (!window.confirm('Are you sure you want to delete this rule?')) return;
+        try {
+            await rulesAPI.delete(ruleId);
+            loadRules();
+        } catch (error) {
+            alert('Failed to delete rule');
+        }
+    };
+
 
     const handleImportJSON = () => {
         if (!jsonData.trim()) {
@@ -390,18 +449,85 @@ const CustomRules = () => {
                     </FormControl>
                 </SearchBar>
 
-                {/* Empty State */}
-                <EmptyState>
-                    <Typography sx={{ color: '#757575', marginBottom: '16px', fontSize: '16px' }}>
-                        No custom rules found
-                    </Typography>
-                    <CreateButton
-                        startIcon={<AddIcon />}
-                        onClick={() => setCreateDialogOpen(true)}
-                    >
-                        Create Your First Rule
-                    </CreateButton>
-                </EmptyState>
+                {/* Rules List */}
+                {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                        <CircularProgress sx={{ color: '#ff9800' }} />
+                    </Box>
+                ) : rules.length > 0 ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {rules
+                            .filter(rule => {
+                                const matchesSearch = rule.rule_name.toLowerCase().includes(searchQuery.toLowerCase());
+                                const matchesPlatform = platformFilter === 'All Platforms' || rule.platform === platformFilter;
+                                const matchesStatus = statusFilter === 'All Status' || (statusFilter === 'Active' ? rule.is_active : !rule.is_active);
+                                return matchesSearch && matchesPlatform && matchesStatus;
+                            })
+                            .map((rule) => (
+                                <Card key={rule.rule_id} sx={{ p: 3, borderRadius: '12px', border: '1px solid #f0f0f0', transition: '0.2s', '&:hover': { boxShadow: '0 4px 20px rgba(0,0,0,0.05)' } }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <Box sx={{ flex: 1 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1, flexWrap: 'wrap' }}>
+                                                <Typography variant="h6" sx={{ fontWeight: 700, color: '#212121' }}>
+                                                    {rule.rule_name}
+                                                </Typography>
+                                                <Chip
+                                                    label={rule.severity}
+                                                    size="small"
+                                                    sx={{
+                                                        fontWeight: 600,
+                                                        background: rule.severity === 'Critical' ? '#ffebee' : '#fff3e0',
+                                                        color: rule.severity === 'Critical' ? '#c62828' : '#ef6c00'
+                                                    }}
+                                                />
+                                                <Chip label={rule.platform} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                                                <Chip
+                                                    label={rule.is_active ? 'Active' : 'Inactive'}
+                                                    size="small"
+                                                    color={rule.is_active ? 'success' : 'default'}
+                                                    variant="soft"
+                                                />
+                                            </Box>
+                                            <Typography variant="body2" sx={{ color: '#757575', mb: 2, maxWidth: '800px' }}>
+                                                {rule.description}
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                                <Chip label={`Category: ${rule.category}`} size="small" sx={{ background: '#f5f5f5', fontSize: '11px' }} />
+                                                <Chip label={`Type: ${rule.check_type}`} size="small" sx={{ background: '#f5f5f5', fontSize: '11px' }} />
+                                                {rule.check_pattern && (
+                                                    <Chip label={`Pattern: ${rule.check_pattern}`} size="small" sx={{ background: '#f5f5f5', fontSize: '11px', fontFamily: 'monospace' }} />
+                                                )}
+                                            </Box>
+                                        </Box>
+                                        <Box>
+                                            <IconButton
+                                                onClick={() => handleDeleteRule(rule.rule_id)}
+                                                sx={{
+                                                    color: '#757575',
+                                                    '&:hover': { color: '#f44336', background: 'rgba(244, 67, 54, 0.08)' }
+                                                }}
+                                            >
+                                                <DeleteIcon fontSize="small" />
+                                            </IconButton>
+                                        </Box>
+                                    </Box>
+                                </Card>
+                            ))}
+                    </Box>
+                ) : (
+                    <EmptyState>
+                        <Typography sx={{ color: '#757575', marginBottom: '16px', fontSize: '16px' }}>
+                            No custom rules found
+                        </Typography>
+                        <CreateButton
+                            startIcon={<AddIcon />}
+                            onClick={() => setCreateDialogOpen(true)}
+                        >
+                            Create Your First Rule
+                        </CreateButton>
+                    </EmptyState>
+                )}
+
 
                 {/* Create Rule Dialog */}
                 <StyledDialog
@@ -434,9 +560,10 @@ const CustomRules = () => {
                                 <StyledTextField
                                     fullWidth
                                     placeholder="Enter rule name"
-                                    value={ruleForm.ruleName}
-                                    onChange={(e) => setRuleForm({ ...ruleForm, ruleName: e.target.value })}
+                                    value={ruleForm.rule_name}
+                                    onChange={(e) => setRuleForm({ ...ruleForm, rule_name: e.target.value })}
                                 />
+
                             </Box>
 
                             {/* Category and Severity */}
@@ -506,8 +633,8 @@ const CustomRules = () => {
                                     </Typography>
                                     <FormControl fullWidth>
                                         <StyledSelect
-                                            value={ruleForm.checkType}
-                                            onChange={(e) => setRuleForm({ ...ruleForm, checkType: e.target.value })}
+                                            value={ruleForm.check_type}
+                                            onChange={(e) => setRuleForm({ ...ruleForm, check_type: e.target.value })}
                                             displayEmpty
                                         >
                                             <MenuItem value="">Select check type</MenuItem>
@@ -517,6 +644,7 @@ const CustomRules = () => {
                                         </StyledSelect>
                                     </FormControl>
                                 </Box>
+
                             </Box>
 
                             {/* Description */}
@@ -557,13 +685,14 @@ const CustomRules = () => {
                                 <StyledTextField
                                     fullWidth
                                     placeholder="e.g., ^(?!ACME_) for regex or leave empty"
-                                    value={ruleForm.checkPattern}
-                                    onChange={(e) => setRuleForm({ ...ruleForm, checkPattern: e.target.value })}
+                                    value={ruleForm.check_pattern}
+                                    onChange={(e) => setRuleForm({ ...ruleForm, check_pattern: e.target.value })}
                                 />
                                 <Typography sx={{ fontSize: '12px', color: '#757575', marginTop: '4px' }}>
                                     For regex type: pattern to match. For others: optional configuration
                                 </Typography>
                             </Box>
+
                         </Box>
                     </DialogContent>
 

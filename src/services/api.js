@@ -4,7 +4,7 @@
  */
 
 // Base URL for the API - Update this to match your Python backend URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 console.log('🌐 API_BASE_URL:', API_BASE_URL);
 
@@ -20,6 +20,10 @@ const apiRequest = async (endpoint, options = {}) => {
 
     // Add authorization token if exists
     const token = localStorage.getItem('authToken');
+    const apiKey = localStorage.getItem('apiKey');
+    // if (apiKey) {
+        defaultHeaders['X-API-Key'] = apiKey;
+    // }
     if (token) {
         defaultHeaders['Authorization'] = `Bearer ${token}`;
     }
@@ -66,41 +70,86 @@ export const authAPI = {
     /**
      * Login user
      * @param {Object} credentials - { email, password }
+     * @returns {Promise} { access_token, token_type, user: { email, full_name, user_id } }
      */
     login: async (credentials) => {
-        return apiRequest('/auth/login', {
+        const response = await apiRequest('/auth/login', {
             method: 'POST',
             body: JSON.stringify(credentials),
         });
+
+        // Store token and user data
+        if (response.access_token) {
+            const apiKey = data.api_key_prefix + " : " + data.api_key_hash;
+            localStorage.setItem('authToken', response.access_token);
+            localStorage.setItem('apiKey', apiKey);
+            localStorage.setItem('currentUser', JSON.stringify(response.user));
+        }
+
+        return response;
     },
 
     /**
      * Register new user
-     * @param {Object} userData - { fullName, email, password }
+     * @param {Object} userData - { full_name, email, password, company_name? }
+     * @returns {Promise} User object with trial subscription
      */
     register: async (userData) => {
-        return apiRequest('/auth/register', {
+        const response = await apiRequest('/auth/register', {
             method: 'POST',
             body: JSON.stringify(userData),
         });
+
+        // Auto-login after registration
+        if (response.email) {
+            const loginResponse = await authAPI.login({
+                email: userData.email,
+                password: userData.password
+            });
+            return loginResponse;
+        }
+
+        return response;
     },
 
     /**
      * Logout user
      */
     logout: async () => {
-        return apiRequest('/auth/logout', {
-            method: 'POST',
-        });
+        try {
+            await apiRequest('/auth/logout', {
+                method: 'POST',
+            });
+        } finally {
+            // Always clear local storage
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
+        }
     },
 
     /**
-     * Get current user profile
+     * Refresh access token
      */
-    getCurrentUser: async () => {
-        return apiRequest('/auth/me', {
-            method: 'GET',
+    refreshToken: async () => {
+        const response = await apiRequest('/auth/refresh-token', {
+            method: 'POST',
         });
+
+        if (response.access_token) {
+            const apiKey = data.api_key_prefix + " : " + data.api_key_hash;
+            localStorage.setItem('apiKey', apiKey);
+            localStorage.setItem('authToken', response.access_token);
+        }
+
+        return response;
+    },
+
+    /**
+     * Get current user from localStorage
+     */
+    getCurrentUser: () => {
+        const userStr = localStorage.getItem('currentUser');
+        return userStr ? JSON.parse(userStr) : null;
     },
 };
 
@@ -230,69 +279,22 @@ export const workflowAPI = {
 // ==================== Custom Rules APIs ====================
 
 export const rulesAPI = {
-    /**
-     * Get all custom rules
-     */
-    getAll: async () => {
-        return apiRequest('/rules', {
-            method: 'GET',
-        });
-    },
-
-    /**
-     * Create new custom rule
-     * @param {Object} ruleData
-     */
-    create: async (ruleData) => {
-        return apiRequest('/rules', {
-            method: 'POST',
-            body: JSON.stringify(ruleData),
-        });
-    },
-
-    /**
-     * Update custom rule
-     * @param {string|number} ruleId
-     * @param {Object} ruleData
-     */
-    update: async (ruleId, ruleData) => {
-        return apiRequest(`/rules/${ruleId}`, {
-            method: 'PUT',
-            body: JSON.stringify(ruleData),
-        });
-    },
-
-    /**
-     * Delete custom rule
-     * @param {string|number} ruleId
-     */
-    delete: async (ruleId) => {
-        return apiRequest(`/rules/${ruleId}`, {
-            method: 'DELETE',
-        });
-    },
-
-    /**
-     * Import rules from JSON
-     * @param {Array} rulesData
-     * @param {boolean} overwrite
-     */
-    import: async (rulesData, overwrite = false) => {
-        return apiRequest('/rules/import', {
-            method: 'POST',
-            body: JSON.stringify({ rules: rulesData, overwrite }),
-        });
-    },
-
-    /**
-     * Export rules to JSON
-     */
-    export: async () => {
-        return apiRequest('/rules/export', {
-            method: 'GET',
-        });
-    },
+    getAll: () => apiRequest('/custom-rules'),
+    create: (ruleData) => apiRequest('/custom-rules', {
+        method: 'POST',
+        body: JSON.stringify(ruleData),
+    }),
+    update: (ruleId, ruleData) => apiRequest(`/custom-rules/${ruleId}`, {
+        method: 'PUT',
+        body: JSON.stringify(ruleData),
+    }),
+    delete: (ruleId) => apiRequest(`/custom-rules/${ruleId}`, {
+        method: 'DELETE',
+    }),
 };
+
+export const customRulesAPI = rulesAPI;
+
 
 // ==================== Export APIs ====================
 
@@ -450,52 +452,67 @@ export const analysisAPI = {
      * Upload and analyze UiPath workflow file
      * @param {File} file - Workflow file to analyze
      */
-    uploadAndAnalyze: async (file) => {
+    uploadAndAnalyze: async (file, options = {}) => {
+
         const formData = new FormData();
         formData.append('file', file);
 
-        const url = `${API_BASE_URL}/analyze/uipath`;
-        let apiKey = localStorage.getItem('apiKey');
-
-        // TEMPORARY: Use dummy key if not found (for testing)
-        if (!apiKey) {
-            console.warn('⚠️ No API key found. Using dummy key for testing.');
-            apiKey = 'sk_live_test_dummy_key_12345';
+        // NOTE: Backend currently uses /uipath for both UiPath and Blue Prism mock uploads
+        let url = `${API_BASE_URL}/analyze/uipath`;
+        if (options?.projectId) {
+            url += `?project_id=${options.projectId}`;
         }
 
-        console.log('📤 Uploading to:', url);
-        console.log('🔑 Using API key:', apiKey.substring(0, 20) + '...');
 
+        // PRIORITY: Use JWT (authToken) if available, fallback to apiKey
+        // This allows the "same API identity" to circulate via the user's login session
+        const authToken = localStorage.getItem('authToken');
+        const apiKey = localStorage.getItem('apiKey');
+        const authHeaderValue = authToken || apiKey;
+
+        if (!authHeaderValue) {
+            console.error('❌ No Authentication found in localStorage');
+            throw new Error('Analysis requires a valid session or API Key. Please log in again.');
+        }
+
+        console.log('📤 Uploading file to analysis engine:', file.name);
+        console.log('📍 Target URL:', url);
+        console.log('🔑 Auth Method:', authToken ? 'JWT Session' : 'API Key');
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
-                    // Backend expects API key in Authorization Bearer header
-                    'Authorization': `Bearer ${apiKey}`,
+                    // Use whichever token is available (Backend now supports both)
+                    'Authorization': `Bearer ${authHeaderValue}`,
+                    'X-API-Key': apiKey
                 },
                 body: formData,
             });
 
-            console.log('📡 Response status:', response.status);
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('❌ Error response:', errorText);
-
+                let errorData;
                 try {
-                    const error = JSON.parse(errorText);
-                    throw new Error(error.detail || 'Upload failed');
+                    errorData = JSON.parse(errorText);
                 } catch (e) {
-                    throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
+                    errorData = { detail: errorText };
                 }
+
+                if (response.status === 401) {
+                    throw new Error('Authentication failed (Invalid API Key). Please check your API key in settings.');
+                }
+                throw new Error(errorData.detail || errorData.message || `Upload failed with status ${response.status}`);
             }
 
-            return response.json();
+            const result = await response.json();
+            return result;
         } catch (error) {
             console.error('❌ Upload error:', error);
             throw error;
         }
     },
+
 
     /**
      * Get analysis status and results
@@ -507,13 +524,60 @@ export const analysisAPI = {
         });
     },
 
+    getHistory: async (projectId) => {
+        const query = projectId ? `?project_id=${projectId}` : '';
+        return apiRequest(`/analysis-history/${query}`);
+    },
+
+
     /**
      * Upload multiple files for batch analysis
      * @param {File[]} files - Array of workflow files
      */
-    uploadMultiple: async (files) => {
-        const uploadPromises = files.map(file => analysisAPI.uploadAndAnalyze(file));
+    uploadMultiple: async (files, options = {}) => {
+        const uploadPromises = files.map(file => analysisAPI.uploadAndAnalyze(file, options));
         return Promise.all(uploadPromises);
+    },
+
+
+    /**
+     * Get workflow details by ID
+     * @param {string} workflowId - Workflow ID from upload response
+     */
+    getWorkflow: async (workflowId) => {
+        return apiRequest(`/workflows/${workflowId}`, {
+            method: 'GET',
+        });
+    },
+
+    /**
+     * Get AI-generated suggestions for workflow
+     * @param {string} workflowId - Workflow ID
+     */
+    getSuggestions: async (workflowId) => {
+        return apiRequest(`/workflows/${workflowId}/suggestions`, {
+            method: 'GET',
+        });
+    },
+
+    /**
+     * Get migration preview with activity mappings
+     * @param {string} workflowId - Workflow ID
+     */
+    getMigrationPreview: async (workflowId) => {
+        return apiRequest(`/workflows/${workflowId}/migration-preview`, {
+            method: 'GET',
+        });
+    },
+
+    /**
+     * Get AI-generated migration strategy
+     * @param {string} workflowId - Workflow ID
+     */
+    getMigrationStrategy: async (workflowId) => {
+        return apiRequest(`/workflows/${workflowId}/migration-strategy`, {
+            method: 'POST',
+        });
     },
 };
 
@@ -542,3 +606,5 @@ export default {
     analysis: analysisAPI,
     health: healthAPI,
 };
+
+

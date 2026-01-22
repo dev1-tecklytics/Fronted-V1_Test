@@ -1,5 +1,6 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+
 import LandingPage from './components/LandingPage';
 import Login from './components/Login';
 import Signup from './components/Signup';
@@ -12,6 +13,7 @@ import CustomRules from './components/CustomRules';
 import PricingPage from './components/PricingPage';
 import MySubscription from './components/MySubscription';
 import APIKeysManagement from './components/APIKeysManagement';
+import WorkflowDetail from './components/WorkflowDetail';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
@@ -39,7 +41,21 @@ const theme = createTheme({
   },
 });
 
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+
+  const isAuthenticated = !!localStorage.getItem('authToken');
+
+  if (!isAuthenticated) {
+    console.warn('🔒 Route protected. Redirecting to login.');
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
 function App() {
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -48,15 +64,17 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/workspace" element={<ProjectWorkspace />} />
-          <Route path="/workflow-analyzer" element={<WorkflowAnalyzer />} />
-          <Route path="/uipath-to-blueprism" element={<UiPathToBluePrism />} />
-          <Route path="/code-review" element={<CodeReviewTool />} />
-          <Route path="/custom-rules" element={<CustomRules />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/subscription" element={<MySubscription />} />
-          <Route path="/api-keys" element={<APIKeysManagement />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/workspace" element={<ProtectedRoute><ProjectWorkspace /></ProtectedRoute>} />
+          <Route path="/workflow-analyzer" element={<ProtectedRoute><WorkflowAnalyzer /></ProtectedRoute>} />
+          <Route path="/uipath-to-blueprism" element={<ProtectedRoute><UiPathToBluePrism /></ProtectedRoute>} />
+          <Route path="/code-review" element={<ProtectedRoute><CodeReviewTool /></ProtectedRoute>} />
+          <Route path="/custom-rules" element={<ProtectedRoute><CustomRules /></ProtectedRoute>} />
+          <Route path="/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
+          <Route path="/subscription" element={<ProtectedRoute><MySubscription /></ProtectedRoute>} />
+          <Route path="/api-keys" element={<ProtectedRoute><APIKeysManagement /></ProtectedRoute>} />
+          <Route path="/workflow-detail" element={<ProtectedRoute><WorkflowDetail /></ProtectedRoute>} />
+
         </Routes>
       </Router>
     </ThemeProvider>

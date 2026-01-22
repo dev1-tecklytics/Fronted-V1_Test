@@ -20,9 +20,13 @@ import {
     Star as StarIcon,
     Rocket as RocketIcon,
     Business as BusinessIcon,
+    ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
+
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
+import { projectAPI, analysisAPI } from '../services/api';
+
 import { subscriptionAPI } from '../services/api';
 
 const PageContainer = styled(Box)(({ theme }) => ({
@@ -270,6 +274,13 @@ const PricingPage = () => {
     return (
         <PageContainer>
             <Container maxWidth="lg">
+                <Button
+                    startIcon={<ArrowBackIcon sx={{ color: '#fff' }} />}
+                    onClick={() => navigate('/dashboard')}
+                    sx={{ color: '#fff', mb: 2, textTransform: 'none' }}
+                >
+                    Back to Dashboard
+                </Button>
                 <Title>Choose Your Plan</Title>
                 <Subtitle>
                     Start analyzing your automation workflows today. Upgrade or downgrade anytime.

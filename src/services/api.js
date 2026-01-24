@@ -586,6 +586,80 @@ export const analysisAPI = {
       method: "POST",
     });
   },
+  /**
+   * Get AI-generated migration strategy
+   * @param {string} workflowId - Workflow ID
+   */
+  getMigrationStrategy: async (workflowId) => {
+    return apiRequest(`/workflows/${workflowId}/migration-strategy`, {
+      method: "POST",
+    });
+  },
+};
+
+// ==================== Code Review APIs ====================
+
+export const codeReviewAPI = {
+  /**
+   * Get existing code review for a workflow (intelligent caching)
+   * @param {string} workflowId - Workflow ID to check
+   * @returns {Promise} Cached review results or null
+   */
+  getExistingReview: async (workflowId) => {
+    try {
+      return await apiRequest(`/code-review?workflowId=${workflowId}`, {
+        method: "GET",
+      });
+    } catch (error) {
+      // Return null if no cached review found (404)
+      if (error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Run new code review analysis
+   * @param {Object} reviewData - { workflowId, platform }
+   * @returns {Promise} Code review results
+   */
+  runReview: async (reviewData) => {
+    return apiRequest("/code-review", {
+      method: "POST",
+      body: JSON.stringify(reviewData),
+    });
+  },
+
+  /**
+   * Get all code reviews for current user
+   * @returns {Promise} Array of code review results
+   */
+  getAllReviews: async () => {
+    return apiRequest("/code-review/history", {
+      method: "GET",
+    });
+  },
+
+  /**
+   * Export code review to CSV
+   * @param {string} reviewId - Review ID
+   * @returns {Promise<Blob>} CSV file blob
+   */
+  exportToCSV: async (reviewId) => {
+    const response = await fetch(
+      `${API_BASE_URL}/code-review/${reviewId}/export`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+        },
+      },
+    );
+
+    if (!response.ok) throw new Error("Export failed");
+    return await response.blob();
+  },
 };
 
 // ==================== Health Check ====================
@@ -611,5 +685,6 @@ export default {
   subscriptions: subscriptionAPI,
   apiKeys: apiKeyAPI,
   analysis: analysisAPI,
+  codeReview: codeReviewAPI,
   health: healthAPI,
 };

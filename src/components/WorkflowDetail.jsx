@@ -547,6 +547,35 @@ const WorkflowDetail = () => {
           </Box>
         </Card>
 
+        {/* Action Buttons */}
+        <Card
+          sx={{
+            p: 3,
+            borderRadius: "12px",
+            border: "1px solid #f0f0f0",
+            mb: 3,
+          }}
+        >
+          <Button
+            onClick={() => router.push(`/workflows/${params.id}/variable-analysis`)}
+            sx={{
+              background: "linear-gradient(to right, #9c27b0, #e91e63)",
+              color: "white",
+              textTransform: "none",
+              borderRadius: "8px",
+              px: 3,
+              py: 1.5,
+              "&:hover": {
+                background: "linear-gradient(to right, #7b1fa2, #c2185b)",
+              },
+            }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Variable Analysis
+            </Typography>
+          </Button>
+        </Card>
+
         {/* Migration Preview */}
         <Card
           sx={{

@@ -284,11 +284,12 @@ const CodeReviewTool = () => {
         const history = await analysisAPI.getHistory(project.project_id);
         if (history && history.length > 0) {
           history.forEach((analysis) => {
+            console.log(analysis)
             // Include ALL uploaded files, not just completed analyses
             // Code review can be run on any uploaded workflow
             allWorkflows.push({
-              id: analysis.analysis_id,
-              name: analysis.file_name,
+              id: analysis.id,
+              name: analysis.workflowName,
               project: project.name,
               platform: project.platform,
               status: analysis.status,
@@ -685,59 +686,45 @@ const CodeReviewTool = () => {
                 >
                   Workflow
                 </Typography>
-                <StyledSelect
-                  value={selectedWorkflow}
-                  onChange={(e) => setSelectedWorkflow(e.target.value)}
+                <Select
+                  value={selectedWorkflow || ""}
+                  onChange={(e) => {
+                    console.log("Workflow selection changed:", e.target.value);
+                    setSelectedWorkflow(e.target.value);
+                  }}
                   displayEmpty
+                  disabled={workflows.length === 0}
+                  sx={{
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "#e0e0e0",
+                    },
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "#9d4edd",
+                    },
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "#9d4edd",
+                      borderWidth: "2px",
+                    },
+                    borderRadius: "8px",
+                    background: "#ffffff",
+                  }}
                 >
                   {workflows.length === 0 ? (
                     <MenuItem value="">
                       <em>No workflows available</em>
                     </MenuItem>
                   ) : (
-                    workflows.map((wf) => (
-                      <MenuItem key={wf.id} value={wf.id}>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1,
-                            width: "100%",
-                          }}
-                        >
-                          <Typography sx={{ flex: 1 }}>
-                            {wf.name} ({wf.project})
-                          </Typography>
-                          {wf.activities > 0 && (
-                            <Chip
-                              label={`${wf.activities} activities`}
-                              size="small"
-                              sx={{ fontSize: "11px", height: "20px" }}
-                            />
-                          )}
-                          {wf.status && (
-                            <Chip
-                              label={wf.status}
-                              size="small"
-                              sx={{
-                                fontSize: "11px",
-                                height: "20px",
-                                background:
-                                  wf.status.toLowerCase() === "completed"
-                                    ? "#e8f5e9"
-                                    : "#fff3e0",
-                                color:
-                                  wf.status.toLowerCase() === "completed"
-                                    ? "#2e7d32"
-                                    : "#f57c00",
-                              }}
-                            />
-                          )}
-                        </Box>
+                    workflows.map((wf, index) => (
+                      <MenuItem 
+                        key={index}
+                        value={wf.id || wf.analysis_id || wf.workflow_id || index}
+                      >
+                        {(!wf.name) ? "Unknown Workflow" : wf.name}
+                        {wf.activities > 0 && ` (${wf.activities} activities)`}
                       </MenuItem>
                     ))
                   )}
-                </StyledSelect>
+                </Select>
               </FormControl>
 
               <FormControl fullWidth>
@@ -807,8 +794,8 @@ const CodeReviewTool = () => {
                 )
               }
               onClick={handleRunReview}
-              disabled={!selectedWorkflow || reviewing}
-              reviewing={reviewing}
+              disabled={!selectedWorkflow}
+              // reviewing={reviewing}
             >
               {reviewing ? "Analyzing..." : "Run Code Review"}
             </RunButton>
@@ -816,7 +803,7 @@ const CodeReviewTool = () => {
 
           {reviewResults && (
             <Fade in={true} timeout={600}>
-              <>
+              <Box>
                 {/* Results Header */}
                 <Box
                   sx={{
@@ -999,7 +986,7 @@ const CodeReviewTool = () => {
                     </Box>
                   </Box>
 
-                  {reviewResults.categories.map((category, index) => (
+                  {reviewResults?.categories?.map((category, index) => (
                     <CategoryItem key={index}>
                       <Box
                         sx={{
@@ -1122,7 +1109,7 @@ const CodeReviewTool = () => {
                     }}
                   >
                     <Tab
-                      label={`Rule-Based (${reviewResults.ruleBasedIssues.length})`}
+                      label={`Rule-Based (${reviewResults?.ruleBasedIssues?.length})`}
                     />
                     <Tab label="AI Insights" />
                   </Tabs>
@@ -1187,7 +1174,7 @@ const CodeReviewTool = () => {
                           }}
                         >
                           Showing {filteredIssues.length} of{" "}
-                          {reviewResults.ruleBasedIssues.length} issues
+                          {reviewResults?.ruleBasedIssues?.length} issues
                         </Typography>
                       </Box>
 
@@ -1411,7 +1398,7 @@ const CodeReviewTool = () => {
                     </Box>
                   )}
                 </Card>
-              </>
+              </Box>
             </Fade>
           )}
         </Container>

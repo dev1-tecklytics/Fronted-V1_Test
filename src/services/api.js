@@ -536,6 +536,10 @@ export const analysisAPI = {
     return apiRequest(`/analyze/history${query}`);
   },
 
+  getWorkflowsForProject: async (projectId) => {
+    const query = projectId ? `?project_id=${projectId}` : "";
+    return apiRequest(`/workflows/project/${query}`);
+  },
   /**
    * Upload multiple files for batch analysis
    * @param {File[]} files - Array of workflow files
@@ -600,15 +604,41 @@ export const analysisAPI = {
 // ==================== Code Review APIs ====================
 
 export const codeReviewAPI = {
+
+    
+
   /**
    * Get existing code review for a workflow (intelligent caching)
    * @param {string} workflowId - Workflow ID to check
    * @returns {Promise} Cached review results or null
    */
   getExistingReview: async (workflowId) => {
+    const authToken = localStorage.getItem("authToken");
+    const apiKey = localStorage.getItem("apiKey");
+    const authHeaderValue = authToken || apiKey;
+
+    if (!authHeaderValue) {
+      console.error("❌ No Authentication found in localStorage");
+      throw new Error(
+        "Analysis requires a valid session or API Key. Please log in again.",
+      );
+    }
+    
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(workflowId)) {
+      console.error("❌ Invalid workflow ID format. Expected UUID, got:", workflowId);
+      throw new Error("Invalid workflow ID format. Please select a valid workflow.");
+    }
+    
     try {
-      return await apiRequest(`/code-review?workflowId=${workflowId}`, {
+      return await apiRequest(`/code-review?workflow_id=${encodeURIComponent(workflowId)}`, {
         method: "GET",
+        headers: {
+            // Use whichever token is available (Backend now supports both)
+            Authorization: `Bearer ${authHeaderValue}`,
+            "X-API-Key": apiKey,
+          },
       });
     } catch (error) {
       // Return null if no cached review found (404)
@@ -625,8 +655,23 @@ export const codeReviewAPI = {
    * @returns {Promise} Code review results
    */
   runReview: async (reviewData) => {
+    const authToken = localStorage.getItem("authToken");
+    const apiKey = localStorage.getItem("apiKey");
+    const authHeaderValue = authToken || apiKey;
+
+    if (!authHeaderValue) {
+      console.error("❌ No Authentication found in localStorage");
+      throw new Error(
+        "Analysis requires a valid session or API Key. Please log in again.",
+      );
+    }
     return apiRequest("/code-review", {
       method: "POST",
+      headers: {
+        // Use whichever token is available (Backend now supports both)
+        Authorization: `Bearer ${authHeaderValue}`,
+        "X-API-Key": apiKey,
+      },
       body: JSON.stringify(reviewData),
     });
   },

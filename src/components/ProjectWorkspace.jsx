@@ -73,6 +73,7 @@ import {
   projectAPI,
 } from "../services/api";
 import api from "../services/api";
+import AnalysisResults from "./AnalysisResults";
 
 // Styled components
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
@@ -261,6 +262,7 @@ const ProjectWorkspace = () => {
               p.project_id === activeId ||
               (lastProject && p.project_id === lastProject.project_id),
           );
+          console.log("Match found:", match);
           setCurrentProject(match || data[0]);
         }
       } catch (error) {
@@ -278,8 +280,11 @@ const ProjectWorkspace = () => {
 
   // Load saved analysis results when project changes
   useEffect(() => {
+    console.log("🔍 useEffect triggered for currentProject:", currentProject);
+    
     const loadProjectAnalysis = async () => {
       if (currentProject?.project_id) {
+        console.log("📂 Loading analysis for project:", currentProject.name, currentProject.project_id);
         localStorage.setItem("activeProjectId", currentProject.project_id);
         localStorage.setItem("currentProject", JSON.stringify(currentProject));
 
@@ -289,73 +294,56 @@ const ProjectWorkspace = () => {
           );
 
           if (history && history.length > 0) {
-            // Filter for completed items with results
+            console.log("📊 Raw history data:", history);
+            console.log("📊 First history item:", history[0]);
+            
+            // Filter for completed items with analysis data
             const completedAnalyses = history.filter(
-              (h) =>
-                (h.status === "completed" || h.status === "COMPLETED") &&
-                h.result,
+              (h) => {
+                console.log("🔍 Checking item:", { status: h.status, hasMetrics: !!h.metrics, hasComplexity: !!h.complexity });
+                return (h.status === "completed" || h.status === "COMPLETED") && (h.metrics || h.complexity);
+              }
             );
+            
+            console.log("✅ Completed analyses found:", completedAnalyses.length);
 
             if (completedAnalyses.length > 0) {
               // Aggregate individual file results into the project dashboard structure
               const processes = completedAnalyses.map((h) => {
-                const r = h.result || {};
+                // Use the history item directly since it contains the analysis data
+                const r = h; // h contains metrics, complexity, etc. directly
 
-                // Handle complexity - backend may return object {score, level} or just a number
+                // Handle complexity - backend returns {score, level}
                 let complexityScore = 50;
                 let complexityLevel = "Medium";
 
-                if (typeof r.complexity === "object" && r.complexity !== null) {
-                  // Backend returned {score, level}
-                  complexityScore =
-                    r.complexity.score ||
-                    r.complexityScore ||
-                    r.complexity_score ||
-                    50;
-                  complexityLevel =
-                    r.complexity.level || r.complexityLevel || "Medium";
+                if (r.complexity && typeof r.complexity === "object") {
+                  complexityScore = r.complexity.score || 50;
+                  complexityLevel = r.complexity.level || "Medium";
                 } else {
-                  // Backend returned simple values
-                  complexityScore =
-                    r.complexityScore ||
-                    r.complexity_score ||
-                    r.complexity ||
-                    50;
-                  complexityLevel =
-                    r.complexityLevel || r.complexity_level || "Medium";
+                  complexityScore = r.complexity || 50;
+                  complexityLevel = complexityScore > 80 ? "High" : complexityScore > 50 ? "Medium" : "Low";
                 }
 
                 return {
                   name:
-                    r.workflowName ||
+                    r.workflow_name ||
                     r.name ||
                     h.file_name?.replace(/\.(xaml|bp|xml)$/i, "") ||
                     "Unknown",
                   platform: currentProject.platform,
                   complexity: complexityScore,
                   level: complexityLevel,
-                  activities: r.totalActivities || r.activities || 0,
-                  effort:
-                    r.estimatedEffortHours ||
-                    r.effort ||
-                    (r.totalActivities || r.activities
-                      ? ((r.totalActivities || r.activities) * 0.4).toFixed(1)
-                      : "0"),
-                  risks:
-                    r.riskIndicators ||
-                    (r.details
-                      ? Object.entries(r.details)
-                          .filter(([k, v]) => v === "Fail")
-                          .map(([k, v]) => k.replace(/_/g, " "))
-                      : ["Standard Review"]),
-                  workflow_id: r.id || r.workflow_id || h.analysis_id,
+                  activities: r.metrics?.activity_count || 0,
+                  effort: ((r.metrics?.activity_count || 0) * 0.4).toFixed(1),
+                  risks: r.code_review?.findings?.map(f => f.message) || ["No issues found"],
+                  workflow_id: r.workflow_id || r.id,
                   fullAnalysis: {
                     ...r,
                     analysis: {
-                      activity_breakdown: r.activityBreakdown ||
-                        r.activity_breakdown || {
-                          Other: r.totalActivities || r.activities || 0,
-                        },
+                      activity_breakdown: r.activity_breakdown || {
+                        Other: r.metrics?.activity_count || 0,
+                      },
                     },
                   },
                 };
@@ -389,7 +377,7 @@ const ProjectWorkspace = () => {
               };
 
               setAnalysisData(aggregatedData);
-              setShowResults(true);
+              setShowResults(false);
               console.log(
                 `📂 Aggregated ${processes.length} workflows from history for project: ${currentProject.name}`,
               );
@@ -419,6 +407,8 @@ const ProjectWorkspace = () => {
           setAnalysisData(null);
           setShowResults(false);
         }
+      } else {
+        console.log("⚠️ No currentProject or project_id found:", currentProject);
       }
     };
 
@@ -731,7 +721,12 @@ const ProjectWorkspace = () => {
       setSnackbarSeverity("success");
       setOpenSnackbar(true);
       setAnalyzing(false);
-      setShowResults(true);
+      setUploadedFiles([]);
+      
+      // Refresh analysis data by re-triggering the useEffect
+      setTimeout(() => {
+        setCurrentProject({...currentProject}); // Trigger useEffect to reload analysis
+      }, 1000);
     } catch (error) {
       console.error("❌ Analysis error:", error);
       setSnackbarMessage(`❌ Analysis failed: ${error.message}`);
@@ -889,503 +884,64 @@ const ProjectWorkspace = () => {
     );
   }
 
-  // Show analysis results page if analysis is complete
-  if (showResults && analysisData) {
-    return (
-      <Box sx={{ minHeight: "100vh", background: "#fafbfc" }}>
-        <StyledAppBar position="static">
-          <Toolbar>
-            <IconButton
-              onClick={() => setShowResults(false)}
-              sx={{ color: "#212121", mr: 2 }}
-            >
-              <ArrowBackIcon />
-            </IconButton>
-            <Box sx={{ flexGrow: 1 }}>
-              <Logo>Automation Project Analyzer</Logo>
-              <Subtitle>Analysis Results</Subtitle>
-            </Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <PersonIcon sx={{ color: "#757575", fontSize: 20 }} />
-                <Typography
-                  sx={{
-                    color: "#212121",
-                    fontWeight: 500,
-                    display: { xs: "none", sm: "block" },
-                  }}
-                >
-                  {currentUser.name}
-                </Typography>
-              </Box>
-              <IconButton
-                onClick={handleLogout}
-                sx={{
-                  color: "#757575",
-                  "&:hover": {
-                    color: "#f44336",
-                    background: "rgba(244, 67, 54, 0.08)",
-                  },
-                }}
-              >
-                <LogoutIcon />
-              </IconButton>
-            </Box>
-          </Toolbar>
-        </StyledAppBar>
+  // // Show analysis results page if analysis is complete
+  // if (showResults && analysisData) {
+  //   return (
+  //     <Box sx={{ minHeight: "100vh", background: "#fafbfc" }}>
+  //       <StyledAppBar position="static">
+  //         <Toolbar>
+  //           <IconButton
+  //             onClick={() => setShowResults(false)}
+  //             sx={{ color: "#212121", mr: 2 }}
+  //           >
+  //             <ArrowBackIcon />
+  //           </IconButton>
+  //           <Box sx={{ flexGrow: 1 }}>
+  //             <Logo>Automation Project Analyzer</Logo>
+  //             <Subtitle>Analysis Results</Subtitle>
+  //           </Box>
+  //           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+  //             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+  //               <PersonIcon sx={{ color: "#757575", fontSize: 20 }} />
+  //               <Typography
+  //                 sx={{
+  //                   color: "#212121",
+  //                   fontWeight: 500,
+  //                   display: { xs: "none", sm: "block" },
+  //                 }}
+  //               >
+  //                 {currentUser.name}
+  //               </Typography>
+  //             </Box>
+  //             <IconButton
+  //               onClick={handleLogout}
+  //               sx={{
+  //                 color: "#757575",
+  //                 "&:hover": {
+  //                   color: "#f44336",
+  //                   background: "rgba(244, 67, 54, 0.08)",
+  //                 },
+  //               }}
+  //             >
+  //               <LogoutIcon />
+  //             </IconButton>
+  //           </Box>
+  //         </Toolbar>
+  //       </StyledAppBar>
 
-        <Container maxWidth="xl" sx={{ mt: 3 }}>
-          <Alert severity="success" sx={{ mb: 3, borderRadius: "8px" }}>
-            {uploadedFiles.length} file(s) uploaded successfully
-          </Alert>
+  //       <Container maxWidth="xl" sx={{ mt: 3 }}>
+  //         <Alert severity="success" sx={{ mb: 3, borderRadius: "8px" }}>
+  //           {uploadedFiles.length} file(s) uploaded successfully
+  //         </Alert>
 
-          {/* Statistics Cards */}
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "1fr 1fr",
-                lg: "repeat(4, 1fr)",
-              },
-              gap: 2,
-              mb: 3,
-            }}
-          >
-            <Card
-              sx={{
-                p: 2.5,
-                borderRadius: "12px",
-                border: "1px solid #f0f0f0",
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "8px",
-                  background: "#e3f2fd",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <TrendingIcon sx={{ color: "#2196f3", fontSize: 24 }} />
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: "14px", color: "#757575" }}>
-                  Total Processes
-                </Typography>
-                <Typography sx={{ fontSize: "28px", fontWeight: 700 }}>
-                  {analysisData.totalProcesses}
-                </Typography>
-              </Box>
-            </Card>
-
-            <Card
-              sx={{
-                p: 2.5,
-                borderRadius: "12px",
-                border: "1px solid #f0f0f0",
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "8px",
-                  background: "#f3e5f5",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ChartIcon sx={{ color: "#9c27b0", fontSize: 24 }} />
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: "14px", color: "#757575" }}>
-                  Avg Complexity Score
-                </Typography>
-                <Typography sx={{ fontSize: "28px", fontWeight: 700 }}>
-                  {analysisData.avgComplexity}
-                </Typography>
-              </Box>
-            </Card>
-
-            <Card
-              sx={{
-                p: 2.5,
-                borderRadius: "12px",
-                border: "1px solid #f0f0f0",
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "8px",
-                  background: "#e8f5e9",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <DataIcon sx={{ color: "#4caf50", fontSize: 24 }} />
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: "14px", color: "#757575" }}>
-                  Total Activities
-                </Typography>
-                <Typography sx={{ fontSize: "28px", fontWeight: 700 }}>
-                  {analysisData.totalActivities}
-                </Typography>
-              </Box>
-            </Card>
-
-            <Card
-              sx={{
-                p: 2.5,
-                borderRadius: "12px",
-                border: "1px solid #f0f0f0",
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "8px",
-                  background: "#ffebee",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <WarningIcon sx={{ color: "#f44336", fontSize: 24 }} />
-              </Box>
-              <Box>
-                <Typography sx={{ fontSize: "14px", color: "#757575" }}>
-                  High-Risk Processes
-                </Typography>
-                <Typography sx={{ fontSize: "28px", fontWeight: 700 }}>
-                  {analysisData.highRiskProcesses}
-                </Typography>
-              </Box>
-            </Card>
-          </Box>
-
-          {/* Charts Section */}
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
-              gap: 3,
-              mb: 3,
-            }}
-          >
-            {/* Complexity Distribution Chart */}
-            <Card
-              sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0" }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-                Complexity Distribution
-              </Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={[
-                    {
-                      name: "Low",
-                      value: analysisData.processes.filter(
-                        (p) => p.level === "Low",
-                      ).length,
-                    },
-                    {
-                      name: "Medium",
-                      value: analysisData.processes.filter(
-                        (p) => p.level === "Medium",
-                      ).length,
-                    },
-                    {
-                      name: "High",
-                      value: analysisData.processes.filter(
-                        (p) => p.level === "High",
-                      ).length,
-                    },
-                    {
-                      name: "Very High",
-                      value: analysisData.processes.filter(
-                        (p) =>
-                          p.level === "Very High" || p.level === "Critical",
-                      ).length,
-                    },
-                  ]}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="name" stroke="#757575" />
-                  <YAxis stroke="#757575" allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#ff6b6b" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-
-            {/* Activity Type Breakdown Chart */}
-            <Card
-              sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0" }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
-                Activity Type Breakdown
-              </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  height: 300,
-                }}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={Object.entries(
-                        analysisData.processes.reduce((acc, process) => {
-                          const breakdown = process.activityBreakdown || {};
-
-                          Object.entries(breakdown).forEach(([key, value]) => {
-                            acc[key] = (acc[key] || 0) + value;
-                          });
-
-                          return acc;
-                        }, {}),
-                      ).map(([name, value]) => ({
-                        name,
-                        value,
-                      }))}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={80}
-                      outerRadius={130}
-                      paddingAngle={3}
-                      dataKey="value"
-                      label={({ name, percent }) =>
-                        `${name} (${(percent * 100).toFixed(0)}%)`
-                      }
-                    >
-                      {Object.entries(
-                        analysisData.processes.reduce((acc, process) => {
-                          const breakdown = process.activityBreakdown || {};
-                          Object.entries(breakdown).forEach(([key, value]) => {
-                            acc[key] = (acc[key] || 0) + value;
-                          });
-                          return acc;
-                        }, {}),
-                      ).map((_, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            [
-                              "#4fc3f7",
-                              "#ff6b6b",
-                              "#ffa726",
-                              "#ab47bc",
-                              "#66bb6a",
-                            ][index % 5]
-                          }
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 2,
-                  mt: 2,
-                  justifyContent: "center",
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Box
-                    sx={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: "50%",
-                      background: "#4fc3f7",
-                    }}
-                  />
-                  <Typography sx={{ fontSize: "12px", color: "#757575" }}>
-                    Other
-                  </Typography>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Box
-                    sx={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: "50%",
-                      background: "#ff6b6b",
-                    }}
-                  />
-                  <Typography sx={{ fontSize: "12px", color: "#757575" }}>
-                    Control Flow
-                  </Typography>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Box
-                    sx={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: "50%",
-                      background: "#ffa726",
-                    }}
-                  />
-                  <Typography sx={{ fontSize: "12px", color: "#757575" }}>
-                    Data Manipulation
-                  </Typography>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Box
-                    sx={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: "50%",
-                      background: "#ab47bc",
-                    }}
-                  />
-                  <Typography sx={{ fontSize: "12px", color: "#757575" }}>
-                    Workflow Invocation
-                  </Typography>
-                </Box>
-              </Box>
-            </Card>
-          </Box>
-
-          {/* Process Inventory Table */}
-          <Card
-            sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0" }}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                mb: 2,
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Process Inventory
-              </Typography>
-              <Chip label="All Levels" size="small" />
-            </Box>
-
-            <TableContainer
-              component={Paper}
-              sx={{ boxShadow: "none", border: "1px solid #f0f0f0" }}
-            >
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ background: "#fafafa" }}>
-                    <TableCell sx={{ fontWeight: 600 }}>Process Name</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>PLATFORM</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Complexity</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>LEVEL</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Activities</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Effort (hrs)</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>
-                      RISK INDICATORS
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>ACTIONS</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {analysisData.processes.map((process, index) => (
-                    <TableRow key={index} hover>
-                      <TableCell>{process.name}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={process.platform}
-                          size="small"
-                          sx={{
-                            background: "#f3e5f5",
-                            color: "#9c27b0",
-                            fontWeight: 600,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>{process.complexity}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={process.level}
-                          size="small"
-                          sx={{
-                            background: "#ffebee",
-                            color: "#d32f2f",
-                            fontWeight: 600,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>{process.activities}</TableCell>
-                      <TableCell>{process.effort}</TableCell>
-                      <TableCell>
-                        <Typography sx={{ fontSize: "12px", color: "#757575" }}>
-                          {process.risks.join(", ")}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: "flex", gap: 1 }}>
-                          <IconButton
-                            size="small"
-                            sx={{
-                              color: "#757575",
-                              "&:hover": {
-                                color: "#5e6ff2",
-                                background: "rgba(94, 111, 242, 0.08)",
-                              },
-                            }}
-                            onClick={() => handleViewDetail(process, index)}
-                            title="View detailed analysis"
-                          >
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            sx={{
-                              color: "#757575",
-                              "&:hover": {
-                                color: "#9d4edd",
-                                background: "rgba(157, 78, 221, 0.08)",
-                              },
-                            }}
-                            title="Edit workflow"
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Card>
-        </Container>
-      </Box>
-    );
-  }
+  //         <AnalysisResults
+  //           analysisData={analysisData}
+  //           onViewDetail={handleViewDetail}
+  //         />
+  //       </Container>
+  //     </Box>
+  //   );
+  // }
 
   return (
     <Box sx={{ minHeight: "100vh", background: "#fafbfc" }}>
@@ -1723,6 +1279,7 @@ const ProjectWorkspace = () => {
 
         {/* Empty State or File List */}
         {uploadedFiles.length === 0 ? (
+          (!analysisData) ? (
           <EmptyStateCard>
             <Typography
               variant="body1"
@@ -1733,7 +1290,13 @@ const ProjectWorkspace = () => {
               No workflows analyzed yet. Upload your workflow files to get
               started.
             </Typography>
-          </EmptyStateCard>
+          </EmptyStateCard> ) : (
+            <Card sx={{ mt: 3, p: 3 }}>
+            <AnalysisResults
+            analysisData={analysisData}
+            onViewDetail={handleViewDetail}
+          /></Card>
+          )
         ) : (
           <Card sx={{ mt: 3, p: 3 }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>

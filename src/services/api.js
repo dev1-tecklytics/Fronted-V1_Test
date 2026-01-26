@@ -280,21 +280,86 @@ export const workflowAPI = {
 // ==================== Custom Rules APIs ====================
 
 export const rulesAPI = {
-  getAll: () => apiRequest("/custom-rules"),
+  /**
+   * Get all custom rules with optional filtering
+   */
+  getAll: async (params = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        query.append(key, value);
+      }
+    });
+    return apiRequest(`/custom-rules?${query.toString()}`);
+  },
+
+  /**
+   * Create new custom rule
+   */
   create: (ruleData) =>
     apiRequest("/custom-rules", {
       method: "POST",
       body: JSON.stringify(ruleData),
     }),
+
+  /**
+   * Update custom rule
+   */
   update: (ruleId, ruleData) =>
     apiRequest(`/custom-rules/${ruleId}`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(ruleData),
     }),
+
+  /**
+   * Delete custom rule
+   */
   delete: (ruleId) =>
     apiRequest(`/custom-rules/${ruleId}`, {
       method: "DELETE",
     }),
+
+  /**
+   * Bulk update rules
+   */
+  bulkUpdate: async (bulkData) => {
+    return apiRequest('/custom-rules/bulk', {
+      method: 'PATCH',
+      body: JSON.stringify(bulkData),
+    });
+  },
+
+  /**
+   * Export rules
+   */
+  export: async (params = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        query.append(key, value);
+      }
+    });
+    const apiKey = localStorage.getItem("apiKey");
+    const response = await fetch(`${API_BASE_URL}/custom-rules/export/json`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+        "X-API-Key": apiKey,
+      },
+    });
+    
+    if (!response.ok) throw new Error('Export failed');
+    return await response.blob();
+  },
+
+  /**
+   * Import rules
+   */
+  import: async (importData) => {
+    return apiRequest('/custom-rules/import', {
+      method: 'POST',
+      body: JSON.stringify(importData),
+    });
+  },
 };
 
 export const customRulesAPI = rulesAPI;

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Typography,
@@ -12,6 +12,12 @@ import {
   TableRow,
   Paper,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
 } from "@mui/material";
 import {
   TrendingUp as TrendingIcon,
@@ -34,8 +40,89 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import {
+  analysisAPI,
+} from "../services/api";
 
-const AnalysisResults = ({ analysisData, onViewDetail, onDelete }) => {
+const AnalysisResults = ({ analysisData, onViewDetail, onDelete, 
+  onWorkflowUpdated, setSnackbarMessage, setOpenSnackbar, setSnackbarSeverity }) => {
+  const [editingWorkflow, setEditingWorkflow] = useState(null);
+  const [editedName, setEditedName] = useState('');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const handleEdit = (process) => {
+    setEditingWorkflow(process);
+    setEditedName(process.name);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingWorkflow || !editedName.trim()) {
+      setSnackbarMessage("Workflow name cannot be empty");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      console.log('Updating workflow:', editingWorkflow.workflow_id, 'to name:', editedName.trim());
+      
+      const data = await analysisAPI.updateWorkflowName(editingWorkflow.workflow_id, editedName.trim());
+      
+      setSnackbarMessage("Workflow updated successfully");
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+      setIsEditDialogOpen(false);
+      setEditingWorkflow(null);
+      setEditedName('');
+      
+      // Trigger refresh in parent component
+      if (onWorkflowUpdated) {
+        onWorkflowUpdated();
+      }
+    } catch (error) {
+      console.error('Error updating workflow:', error);
+      setSnackbarMessage("Failed to update workflow");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (workflowId, workflowName) => {
+    if (!window.confirm(`Are you sure you want to delete "${workflowName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingId(workflowId);
+    try {
+      // TODO: Replace with actual API call
+      console.log('Deleting workflow:', workflowId);
+      
+      const data = await analysisAPI.deleteWorkflow(workflowId);
+      
+      setSnackbarMessage("Workflow deleted successfully");
+      setSnackbarSeverity("success");
+      setOpenSnackbar(true);
+      
+      // Call the existing onDelete prop
+      if (onDelete) {
+        onDelete();
+      }
+    } catch (error) {
+      console.error('Error deleting workflow:', error);
+      setSnackbarMessage("Failed to delete workflow");
+      setSnackbarSeverity("error");
+      setOpenSnackbar(true);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <>
       {/* Statistics Cards */}
@@ -412,6 +499,10 @@ const AnalysisResults = ({ analysisData, onViewDetail, onDelete }) => {
                               background: "#eff6ff",
                             },
                           }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(process);
+                          }}
                           title="Edit workflow"
                         >
                           <EditIcon sx={{ fontSize: 16 }} />
@@ -431,8 +522,9 @@ const AnalysisResults = ({ analysisData, onViewDetail, onDelete }) => {
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onDelete?.(process.workflow_id, process.name);
+                            handleDelete(process.workflow_id, process.name);
                           }}
+                          disabled={deletingId === process.workflow_id}
                           title="Delete workflow"
                         >
                           <DeleteIcon sx={{ fontSize: 16 }} />
@@ -445,6 +537,47 @@ const AnalysisResults = ({ analysisData, onViewDetail, onDelete }) => {
             </Table>
           </TableContainer>
         </Card>
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen} maxWidth="sm" fullWidth>
+          <DialogTitle>Edit Workflow</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Workflow Name"
+              fullWidth
+              variant="outlined"
+              value={editedName}
+              onChange={(e) => setEditedName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSaveEdit();
+                }
+              }}
+              sx={{ mt: 2 }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setEditingWorkflow(null);
+                setEditedName('');
+              }}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={isSaving || !editedName.trim()}
+              variant="contained"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </>
     );
   };

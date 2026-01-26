@@ -14,6 +14,7 @@ import PricingPage from './components/PricingPage';
 import MySubscription from './components/MySubscription';
 import APIKeysManagement from './components/APIKeysManagement';
 import WorkflowDetail from './components/WorkflowDetail';
+import VariableAnalysis from './components/VariableAnalysis';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
@@ -74,6 +75,7 @@ function App() {
           <Route path="/subscription" element={<ProtectedRoute><MySubscription /></ProtectedRoute>} />
           <Route path="/api-keys" element={<ProtectedRoute><APIKeysManagement /></ProtectedRoute>} />
           <Route path="/workflow-detail" element={<ProtectedRoute><WorkflowDetail /></ProtectedRoute>} />
+          <Route path="/variable-analysis" element={<ProtectedRoute><VariableAnalysis /></ProtectedRoute>} />
 
         </Routes>
       </Router>

@@ -531,6 +531,18 @@ export const analysisAPI = {
     });
   },
 
+  deleteWorkflow: async (workflowId) => {
+    return apiRequest(`/workflows/${workflowId}`, {
+      method: "DELETE",
+    });
+  },
+
+  updateWorkflowName: async (workflowId, workflowName) => {
+    return apiRequest(`/workflows/name?workflow_id=${workflowId}&workflow_name=${workflowName}`, {
+      method: "PATCH",
+    });
+  },
+
   getHistory: async (projectId) => {
     const query = projectId ? `?project_id=${projectId}` : "";
     return apiRequest(`/analyze/history${query}`);
@@ -707,6 +719,30 @@ export const codeReviewAPI = {
   },
 };
 
+// ==================== Variable Analysis APIs ====================
+
+export const variableAnalysisAPI = {
+  /**
+   * Run variable analysis on workflow
+   * @param {string} workflowId - Workflow ID
+   */
+  runAnalysis: async (workflowId) => {
+    return apiRequest(`/workflows/${workflowId}/variable-analysis`, {
+      method: "POST",
+    });
+  },
+
+  /**
+   * Get variable analysis results
+   * @param {string} workflowId - Workflow ID
+   */
+  getAnalysis: async (workflowId) => {
+    return apiRequest(`/workflows/${workflowId}/variable-analysis`, {
+      method: "GET",
+    });
+  },
+};
+
 // ==================== Health Check ====================
 
 export const healthAPI = {
@@ -731,5 +767,6 @@ export default {
   apiKeys: apiKeyAPI,
   analysis: analysisAPI,
   codeReview: codeReviewAPI,
+  variableAnalysis: variableAnalysisAPI,
   health: healthAPI,
 };

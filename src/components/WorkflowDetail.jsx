@@ -556,8 +556,11 @@ const WorkflowDetail = () => {
             mb: 3,
           }}
         >
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+            Analysis Tools
+          </Typography>
           <Button
-            onClick={() => router.push(`/workflows/${params.id}/variable-analysis`)}
+            onClick={() => navigate('/variable-analysis', { state: { workflow: workflowData } })}
             sx={{
               background: "linear-gradient(to right, #9c27b0, #e91e63)",
               color: "white",
@@ -570,9 +573,7 @@ const WorkflowDetail = () => {
               },
             }}
           >
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Variable Analysis
-            </Typography>
+            Variable Analysis
           </Button>
         </Card>
 

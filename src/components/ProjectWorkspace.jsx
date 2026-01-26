@@ -280,138 +280,6 @@ const ProjectWorkspace = () => {
 
   // Load saved analysis results when project changes
   useEffect(() => {
-    console.log("🔍 useEffect triggered for currentProject:", currentProject);
-    
-    const loadProjectAnalysis = async () => {
-      if (currentProject?.project_id) {
-        console.log("📂 Loading analysis for project:", currentProject.name, currentProject.project_id);
-        localStorage.setItem("activeProjectId", currentProject.project_id);
-        localStorage.setItem("currentProject", JSON.stringify(currentProject));
-
-        try {
-          const history = await analysisAPI.getHistory(
-            currentProject.project_id,
-          );
-
-          if (history && history.length > 0) {
-            console.log("📊 Raw history data:", history);
-            console.log("📊 First history item:", history[0]);
-            
-            // Filter for completed items with analysis data
-            const completedAnalyses = history.filter(
-              (h) => {
-                console.log("🔍 Checking item:", { status: h.status, hasMetrics: !!h.metrics, hasComplexity: !!h.complexity });
-                return (h.status === "completed" || h.status === "COMPLETED") && (h.metrics || h.complexity);
-              }
-            );
-            
-            console.log("✅ Completed analyses found:", completedAnalyses.length);
-
-            if (completedAnalyses.length > 0) {
-              // Aggregate individual file results into the project dashboard structure
-              const processes = completedAnalyses.map((h) => {
-                // Use the history item directly since it contains the analysis data
-                const r = h; // h contains metrics, complexity, etc. directly
-
-                // Handle complexity - backend returns {score, level}
-                let complexityScore = 50;
-                let complexityLevel = "Medium";
-
-                if (r.complexity && typeof r.complexity === "object") {
-                  complexityScore = r.complexity.score || 50;
-                  complexityLevel = r.complexity.level || "Medium";
-                } else {
-                  complexityScore = r.complexity || 50;
-                  complexityLevel = complexityScore > 80 ? "High" : complexityScore > 50 ? "Medium" : "Low";
-                }
-
-                return {
-                  name:
-                    r.workflow_name ||
-                    r.name ||
-                    h.file_name?.replace(/\.(xaml|bp|xml)$/i, "") ||
-                    "Unknown",
-                  platform: currentProject.platform,
-                  complexity: complexityScore,
-                  level: complexityLevel,
-                  activities: r.metrics?.activity_count || 0,
-                  effort: ((r.metrics?.activity_count || 0) * 0.4).toFixed(1),
-                  risks: r.code_review?.findings?.map(f => f.message) || ["No issues found"],
-                  workflow_id: r.workflow_id || r.id,
-                  fullAnalysis: {
-                    ...r,
-                    analysis: {
-                      activity_breakdown: r.activity_breakdown || {
-                        Other: r.metrics?.activity_count || 0,
-                      },
-                    },
-                  },
-                };
-              });
-
-              // Calculate Totals
-              const totalActivities = processes.reduce(
-                (sum, p) => sum + Number(p.activities),
-                0,
-              );
-              const avgComplexity =
-                processes.length > 0
-                  ? processes.reduce(
-                      (sum, p) => sum + Number(p.complexity),
-                      0,
-                    ) / processes.length
-                  : 0;
-              const highRiskProcesses = processes.filter((p) =>
-                ["High", "Very High", "Critical"].includes(p.level),
-              ).length;
-
-              const aggregatedData = {
-                totalProcesses: processes.length,
-                avgComplexity: Math.round(avgComplexity * 10) / 10,
-                totalActivities: totalActivities,
-                highRiskProcesses: highRiskProcesses,
-                processes: processes,
-                analyzedAt: new Date().toISOString(),
-                projectId: currentProject.project_id,
-                projectName: currentProject.name,
-              };
-
-              setAnalysisData(aggregatedData);
-              setShowResults(false);
-              console.log(
-                `📂 Aggregated ${processes.length} workflows from history for project: ${currentProject.name}`,
-              );
-            } else {
-              // Project exists but no completed analysis
-              setAnalysisData(null);
-              setShowResults(false);
-              // Optionally populate uploadedFiles from history if needed, but for now just clear
-              // setUploadedFiles([]);
-            }
-          } else {
-            // No history at all
-            setAnalysisData(null);
-            setShowResults(false);
-            setUploadedFiles([]);
-          }
-        } catch (error) {
-          // Handle 404 or other errors gracefully - endpoint may not exist yet
-          if (error.status === 404) {
-            console.log(
-              "ℹ️ Analysis history endpoint not available yet. Showing empty workspace.",
-            );
-          } else {
-            console.error("Failed to load project analysis:", error);
-          }
-          // Fallback to avoid blank page
-          setAnalysisData(null);
-          setShowResults(false);
-        }
-      } else {
-        console.log("⚠️ No currentProject or project_id found:", currentProject);
-      }
-    };
-
     loadProjectAnalysis();
   }, [currentProject]);
 
@@ -611,74 +479,6 @@ const ProjectWorkspace = () => {
         };
       });
 
-      // Process real AI analysis results from the backend
-      // const processes = uploadResults.map((result, index) => {
-      //   const fileName = uploadedFiles[index].name;
-
-      // DATA MAPPING FIX: Match exact backend response structure
-      // Backend provides: { metrics: { activity_count, ... }, complexity: { score, level }, ... }
-
-      //   const rawActivities = result.metrics?.activity_count || 0;
-      //   const rawComplexity = result.complexity?.score || 0;
-      //   const rawLevel = result.complexity?.level || "";
-
-      //   const activities = rawActivities;
-      //   const complexity = rawComplexity;
-      //   const level =
-      //     rawLevel ||
-      //     (complexity > 100 ? "High" : complexity > 50 ? "Medium" : "Low");
-
-      //   // Metadata extraction from 'metrics'
-      //   const nestingDepth = result.metrics?.nesting_depth || 0;
-      //   const variables = result.metrics?.variable_count || 0;
-      //   const invokedWorkflows = result.metrics?.invoked_workflows || 0;
-      //   const exceptionHandlers = result.metrics?.exception_handlers_count || 0; // Keeping if available
-      //   const analyzedDate = result.analyzed_at || new Date().toISOString();
-      //   const fileSize = result.metrics?.file_size_kb || 0;
-
-      //   return {
-      //     name: fileName.replace(/\.(xaml|bp|xml)$/i, ""),
-      //     platform: currentProject?.platform || "Unknown",
-      //     complexity: complexity,
-      //     level: level,
-      //     activities: activities,
-      //     nestingDepth: nestingDepth,
-      //     variables: variables,
-      //     invokedWorkflows: invokedWorkflows,
-      //     exceptionHandlers: exceptionHandlers,
-      //     analyzedDate: analyzedDate,
-      //     fileSize: fileSize,
-      //     file: fileName,
-      //     project: currentProject?.name || "Unknown",
-
-      //     effort:
-      //       result.migration?.total_effort_hours ||
-      //       (activities > 0 ? (activities * 0.4).toFixed(1) : "0"),
-      //     risks: result.code_review?.findings?.map((f) => f.message) || [],
-      //     workflow_id: result.workflow_id,
-      //     fullAnalysis: {
-      //       ...result,
-      //       suggestions:
-      //         result.code_review?.findings?.map((f, i) => ({
-      //           id: i,
-      //           priority:
-      //             f.severity?.toLowerCase() === "major" ? "high" : "medium",
-      //           title: f.message,
-      //           description: f.recommendation,
-      //           impact: f.impact,
-      //           effort: f.effort,
-      //         })) || [],
-      //       analysis: {
-      //         ...result.metrics,
-      //         activity_count: activities,
-      //         complexity_score: complexity,
-      //         complexity_level: level,
-      //         activity_breakdown: result.activity_breakdown || {},
-      //       },
-      //     },
-      //   };
-      // });
-
       // Calculate aggregate metrics from the processed data
       const totalActivities = processes.reduce(
         (sum, p) => sum + Number(p.activities),
@@ -768,6 +568,124 @@ const ProjectWorkspace = () => {
         setOpenSnackbar(true);
     }
   };
+
+  const loadProjectAnalysis = async () => {
+    if (currentProject?.project_id) {
+      console.log("📂 Loading analysis for project:", currentProject.name, currentProject.project_id);
+      localStorage.setItem("activeProjectId", currentProject.project_id);
+      localStorage.setItem("currentProject", JSON.stringify(currentProject));
+
+      try {
+        const history = await analysisAPI.getHistory(
+          currentProject.project_id,
+        );
+
+        if (history && history.length > 0) {
+          const completedAnalyses = history.filter(
+            (h) => {
+              return (h.status === "completed" || h.status === "COMPLETED") && (h.metrics || h.complexity);
+            }
+          );
+          
+          if (completedAnalyses.length > 0) {
+            const processes = completedAnalyses.map((h) => {
+              const r = h;
+
+              let complexityScore = 50;
+              let complexityLevel = "Medium";
+
+              console.log("fff: "+r.workflowName)
+
+              if (r.complexity && typeof r.complexity === "object") {
+                complexityScore = r.complexity.score || 50;
+                complexityLevel = r.complexity.level || "Medium";
+              } else {
+                complexityScore = r.complexity || 50;
+                complexityLevel = complexityScore > 80 ? "High" : complexityScore > 50 ? "Medium" : "Low";
+              }
+
+              return {
+                name:
+                  r.workflowName ||
+                  r.name ||
+                  h.file_name?.replace(/\.(xaml|bp|xml)$/i, "") ||
+                  "Unknown",
+                platform: currentProject.platform,
+                complexity: complexityScore,
+                level: complexityLevel,
+                activities: r.metrics?.activity_count || 0,
+                effort: ((r.metrics?.activity_count || 0) * 0.4).toFixed(1),
+                risks: r.code_review?.findings?.map(f => f.message) || ["No issues found"],
+                workflow_id: r.workflow_id || r.id,
+                fullAnalysis: {
+                  ...r,
+                  analysis: {
+                    activity_breakdown: r.activity_breakdown || {
+                      Other: r.metrics?.activity_count || 0,
+                    },
+                  },
+                },
+              };
+            });
+
+            const totalActivities = processes.reduce(
+              (sum, p) => sum + Number(p.activities),
+              0,
+            );
+            const avgComplexity =
+              processes.length > 0
+                ? processes.reduce(
+                    (sum, p) => sum + Number(p.complexity),
+                    0,
+                  ) / processes.length
+                : 0;
+            const highRiskProcesses = processes.filter((p) =>
+              ["High", "Very High", "Critical"].includes(p.level),
+            ).length;
+
+            const aggregatedData = {
+              totalProcesses: processes.length,
+              avgComplexity: Math.round(avgComplexity * 10) / 10,
+              totalActivities: totalActivities,
+              highRiskProcesses: highRiskProcesses,
+              processes: processes,
+              analyzedAt: new Date().toISOString(),
+              projectId: currentProject.project_id,
+              projectName: currentProject.name,
+            };
+
+            setAnalysisData(aggregatedData);
+            setShowResults(false);
+          } else {
+            setAnalysisData(null);
+            setShowResults(false);
+          }
+        } else {
+          setAnalysisData(null);
+          setShowResults(false);
+          setUploadedFiles([]);
+        }
+      } catch (error) {
+        if (error.status === 404) {
+          console.log(
+            "ℹ️ Analysis history endpoint not available yet. Showing empty workspace.",
+          );
+        } else {
+          console.error("Failed to load project analysis:", error);
+        }
+        setAnalysisData(null);
+        setShowResults(false);
+      }
+    }
+  };
+
+  const handleOnWorkflowDelete = async () => {
+    await loadProjectAnalysis();
+  }
+
+  const handleOnWorkflowUpdate = async () => {
+    await loadProjectAnalysis();
+  }
 
   const handleRefresh = async () => {
     console.log("🔄 Refreshing workspace...");
@@ -1295,6 +1213,11 @@ const ProjectWorkspace = () => {
             <AnalysisResults
             analysisData={analysisData}
             onViewDetail={handleViewDetail}
+            setSnackbarMessage= {setSnackbarMessage}
+            setSnackbarSeverity = {setSnackbarSeverity}
+            setOpenSnackbar = {setOpenSnackbar}
+            onDelete = {handleOnWorkflowDelete}
+            onWorkflowUpdated = {handleOnWorkflowUpdate}
           /></Card>
           )
         ) : (

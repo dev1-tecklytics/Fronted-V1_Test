@@ -340,7 +340,7 @@ export const rulesAPI = {
       }
     });
     const apiKey = localStorage.getItem("apiKey");
-    const response = await fetch(`${API_BASE_URL}/custom-rules/export/json`, {
+    const response = await fetch(`${API_BASE_URL}/custom-rules/export/${query.toString()}`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('authToken')}`,
         "X-API-Key": apiKey,

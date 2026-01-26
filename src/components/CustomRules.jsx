@@ -236,9 +236,6 @@ const CustomRules = () => {
     const handleExport = async (format) => {
         try {
             const params = { file_format: format };
-            if (platformFilter !== 'all') params.platform = platformFilter;
-            if (categoryFilter !== 'all') params.category = categoryFilter;
-            if (statusFilter !== 'all') params.isActive = False;
             
             const blob = await rulesAPI.export(params);
             const url = window.URL.createObjectURL(blob);

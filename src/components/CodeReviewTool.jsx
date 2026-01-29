@@ -256,6 +256,8 @@ const CodeReviewTool = () => {
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [isCached, setIsCached] = useState(false);
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+  const [aiAnalysisResults, setAiAnalysisResults] = useState(null);
 
   // Filtering & Search State
   const [severityFilter, setSeverityFilter] = useState("all");
@@ -284,7 +286,7 @@ const CodeReviewTool = () => {
         const history = await analysisAPI.getHistory(project.project_id);
         if (history && history.length > 0) {
           history.forEach((analysis) => {
-            console.log(analysis)
+            console.log(analysis);
             // Include ALL uploaded files, not just completed analyses
             // Code review can be run on any uploaded workflow
             allWorkflows.push({
@@ -509,9 +511,42 @@ const CodeReviewTool = () => {
     };
   };
 
-  const handleRunAIAnalysis = () => {
-    setAiInsightsAvailable(true);
+  const handleRunAIAnalysis = async () => {
+    if (!selectedWorkflow) {
+      alert("Please select a workflow first");
+      return;
+    }
+
+    setAiAnalysisLoading(true);
     setActiveTab(1);
+
+    try {
+      console.log("🤖 Running AI Analysis for workflow:", selectedWorkflow);
+      const results = await codeReviewAPI.runAIAnalysis(selectedWorkflow);
+      console.log("✅ AI Analysis completed:", results);
+      setAiAnalysisResults(results);
+      setAiInsightsAvailable(true);
+    } catch (error) {
+      console.error("❌ AI Analysis failed:", error);
+
+      // Check if backend endpoint is not implemented yet
+      if (error.status === 405 || error.status === 404) {
+        alert(
+          "AI Analysis feature is not yet available on the backend.\n\n" +
+            "The backend needs to implement the POST /api/v1/code-review/ai-analysis endpoint.\n\n" +
+            "Please contact your backend team to enable this feature.",
+        );
+      } else {
+        alert(`AI Analysis failed: ${error.message || "Unknown error"}`);
+      }
+
+      // Reset to show the "not available" state
+      setAiInsightsAvailable(false);
+      setAiAnalysisResults(null);
+      setActiveTab(0); // Go back to rule-based tab
+    } finally {
+      setAiAnalysisLoading(false);
+    }
   };
 
   // Enhanced CSV Export
@@ -715,11 +750,13 @@ const CodeReviewTool = () => {
                     </MenuItem>
                   ) : (
                     workflows.map((wf, index) => (
-                      <MenuItem 
+                      <MenuItem
                         key={index}
-                        value={wf.id || wf.analysis_id || wf.workflow_id || index}
+                        value={
+                          wf.id || wf.analysis_id || wf.workflow_id || index
+                        }
                       >
-                        {(!wf.name) ? "Unknown Workflow" : wf.name}
+                        {!wf.name ? "Unknown Workflow" : wf.name}
                         {wf.activities > 0 && ` (${wf.activities} activities)`}
                       </MenuItem>
                     ))
@@ -1334,17 +1371,41 @@ const CodeReviewTool = () => {
                   )}
 
                   {activeTab === 1 && (
-                    <Box
-                      sx={{
-                        textAlign: "center",
-                        py: 6,
-                        background:
-                          "linear-gradient(135deg, #f9f9ff 0%, #fff5f8 100%)",
-                        borderRadius: "8px",
-                      }}
-                    >
-                      {!aiInsightsAvailable ? (
-                        <>
+                    <Box>
+                      {aiAnalysisLoading ? (
+                        <Box
+                          sx={{
+                            textAlign: "center",
+                            py: 6,
+                            background:
+                              "linear-gradient(135deg, #f9f9ff 0%, #fff5f8 100%)",
+                            borderRadius: "8px",
+                          }}
+                        >
+                          <CircularProgress
+                            size={60}
+                            thickness={4}
+                            sx={{ color: "#9d4edd", mb: 2 }}
+                          />
+                          <Typography sx={{ fontWeight: 600, mb: 1 }}>
+                            Running AI Analysis...
+                          </Typography>
+                          <Typography
+                            sx={{ fontSize: "14px", color: "#757575" }}
+                          >
+                            Please wait while our AI analyzes your workflow
+                          </Typography>
+                        </Box>
+                      ) : !aiInsightsAvailable ? (
+                        <Box
+                          sx={{
+                            textAlign: "center",
+                            py: 6,
+                            background:
+                              "linear-gradient(135deg, #f9f9ff 0%, #fff5f8 100%)",
+                            borderRadius: "8px",
+                          }}
+                        >
                           <AIIcon
                             sx={{ fontSize: 64, color: "#9d4edd", mb: 2 }}
                           />
@@ -1365,35 +1426,363 @@ const CodeReviewTool = () => {
                             architecture, identify patterns, and provide
                             optimization recommendations.
                           </Typography>
-                        </>
-                      ) : (
-                        <>
-                          <CheckIcon
-                            sx={{ fontSize: 64, color: "#4caf50", mb: 2 }}
-                          />
-                          <Typography sx={{ fontWeight: 600, mb: 1 }}>
-                            AI Analysis Complete!
-                          </Typography>
-                          <Typography
+                        </Box>
+                      ) : aiAnalysisResults ? (
+                        <Box>
+                          {/* Overall Assessment */}
+                          <Card
                             sx={{
-                              fontSize: "14px",
-                              color: "#757575",
-                              maxWidth: "600px",
-                              mx: "auto",
+                              p: 3,
                               mb: 3,
+                              background:
+                                "linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)",
+                              border: "1px solid #9d4edd40",
                             }}
                           >
-                            Advanced AI insights are now available. The analysis
-                            includes workflow architecture review, pattern
-                            detection, and intelligent optimization suggestions.
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "start",
+                                gap: 2,
+                              }}
+                            >
+                              <AIIcon sx={{ fontSize: 40, color: "#9d4edd" }} />
+                              <Box sx={{ flex: 1 }}>
+                                <Typography
+                                  variant="h6"
+                                  sx={{ fontWeight: 700, mb: 1 }}
+                                >
+                                  Overall Assessment
+                                </Typography>
+                                <Typography
+                                  sx={{
+                                    fontSize: "14px",
+                                    lineHeight: 1.6,
+                                    mb: 2,
+                                  }}
+                                >
+                                  {aiAnalysisResults.overall_assessment
+                                    ?.summary ||
+                                    "AI analysis completed successfully."}
+                                </Typography>
+
+                                {/* Strengths */}
+                                {aiAnalysisResults.overall_assessment
+                                  ?.strengths &&
+                                  aiAnalysisResults.overall_assessment.strengths
+                                    .length > 0 && (
+                                    <Box sx={{ mb: 2 }}>
+                                      <Typography
+                                        sx={{
+                                          fontWeight: 600,
+                                          fontSize: "13px",
+                                          color: "#4caf50",
+                                          mb: 1,
+                                        }}
+                                      >
+                                        ✓ Strengths
+                                      </Typography>
+                                      {aiAnalysisResults.overall_assessment.strengths.map(
+                                        (strength, idx) => (
+                                          <Typography
+                                            key={idx}
+                                            sx={{
+                                              fontSize: "13px",
+                                              color: "#555",
+                                              pl: 2,
+                                              mb: 0.5,
+                                            }}
+                                          >
+                                            • {strength}
+                                          </Typography>
+                                        ),
+                                      )}
+                                    </Box>
+                                  )}
+
+                                {/* Weaknesses */}
+                                {aiAnalysisResults.overall_assessment
+                                  ?.weaknesses &&
+                                  aiAnalysisResults.overall_assessment
+                                    .weaknesses.length > 0 && (
+                                    <Box>
+                                      <Typography
+                                        sx={{
+                                          fontWeight: 600,
+                                          fontSize: "13px",
+                                          color: "#f44336",
+                                          mb: 1,
+                                        }}
+                                      >
+                                        ⚠ Areas for Improvement
+                                      </Typography>
+                                      {aiAnalysisResults.overall_assessment.weaknesses.map(
+                                        (weakness, idx) => (
+                                          <Typography
+                                            key={idx}
+                                            sx={{
+                                              fontSize: "13px",
+                                              color: "#555",
+                                              pl: 2,
+                                              mb: 0.5,
+                                            }}
+                                          >
+                                            • {weakness}
+                                          </Typography>
+                                        ),
+                                      )}
+                                    </Box>
+                                  )}
+                              </Box>
+                            </Box>
+                          </Card>
+
+                          {/* Impact Scores */}
+                          {aiAnalysisResults.impact_scores && (
+                            <Card sx={{ p: 3, mb: 3 }}>
+                              <Typography
+                                variant="h6"
+                                sx={{ fontWeight: 700, mb: 2 }}
+                              >
+                                Impact Scores
+                              </Typography>
+                              <Box
+                                sx={{
+                                  display: "grid",
+                                  gridTemplateColumns: {
+                                    xs: "1fr",
+                                    sm: "repeat(2, 1fr)",
+                                  },
+                                  gap: 2,
+                                }}
+                              >
+                                {Object.entries(
+                                  aiAnalysisResults.impact_scores,
+                                ).map(([key, value]) => (
+                                  <Box
+                                    key={key}
+                                    sx={{
+                                      p: 2,
+                                      background: "#f9f9f9",
+                                      borderRadius: "8px",
+                                    }}
+                                  >
+                                    <Typography
+                                      sx={{
+                                        fontSize: "12px",
+                                        color: "#757575",
+                                        mb: 0.5,
+                                        textTransform: "capitalize",
+                                      }}
+                                    >
+                                      {key.replace(/_/g, " ")}
+                                    </Typography>
+                                    <Typography
+                                      sx={{ fontWeight: 700, fontSize: "24px" }}
+                                    >
+                                      {value}/10
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+                            </Card>
+                          )}
+
+                          {/* Patterns Detected */}
+                          {aiAnalysisResults.patterns_detected &&
+                            aiAnalysisResults.patterns_detected.length > 0 && (
+                              <Card sx={{ p: 3, mb: 3 }}>
+                                <Typography
+                                  variant="h6"
+                                  sx={{ fontWeight: 700, mb: 2 }}
+                                >
+                                  Patterns Detected
+                                </Typography>
+                                {aiAnalysisResults.patterns_detected.map(
+                                  (pattern, index) => (
+                                    <Box
+                                      key={index}
+                                      sx={{
+                                        p: 2,
+                                        mb: 2,
+                                        background: "#f9f9f9",
+                                        borderRadius: "8px",
+                                        borderLeft: "4px solid #9d4edd",
+                                      }}
+                                    >
+                                      <Typography
+                                        sx={{ fontWeight: 600, mb: 1 }}
+                                      >
+                                        {pattern.pattern || pattern.name}
+                                      </Typography>
+                                      <Typography
+                                        sx={{
+                                          fontSize: "14px",
+                                          color: "#757575",
+                                        }}
+                                      >
+                                        {pattern.description || pattern.details}
+                                      </Typography>
+                                    </Box>
+                                  ),
+                                )}
+                              </Card>
+                            )}
+
+                          {/* Optimization Opportunities */}
+                          {aiAnalysisResults.optimization_opportunities &&
+                            aiAnalysisResults.optimization_opportunities
+                              .length > 0 && (
+                              <Card sx={{ p: 3, mb: 3 }}>
+                                <Typography
+                                  variant="h6"
+                                  sx={{ fontWeight: 700, mb: 2 }}
+                                >
+                                  Optimization Opportunities
+                                </Typography>
+                                {aiAnalysisResults.optimization_opportunities.map(
+                                  (opp, index) => (
+                                    <Box
+                                      key={index}
+                                      sx={{
+                                        p: 2,
+                                        mb: 2,
+                                        background:
+                                          "linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%)",
+                                        borderRadius: "8px",
+                                        borderLeft: "4px solid #4caf50",
+                                      }}
+                                    >
+                                      <Typography
+                                        sx={{ fontWeight: 600, mb: 1 }}
+                                      >
+                                        {opp.title || opp.opportunity}
+                                      </Typography>
+                                      <Typography
+                                        sx={{
+                                          fontSize: "14px",
+                                          color: "#757575",
+                                          mb: 1,
+                                        }}
+                                      >
+                                        {opp.description || opp.details}
+                                      </Typography>
+                                      {opp.potential_impact && (
+                                        <Chip
+                                          label={`Impact: ${opp.potential_impact}`}
+                                          size="small"
+                                          sx={{
+                                            background: "#4caf50",
+                                            color: "#fff",
+                                            fontWeight: 600,
+                                          }}
+                                        />
+                                      )}
+                                    </Box>
+                                  ),
+                                )}
+                              </Card>
+                            )}
+
+                          {/* Migration Risks */}
+                          {aiAnalysisResults.migration_risks &&
+                            aiAnalysisResults.migration_risks.length > 0 && (
+                              <Card sx={{ p: 3, mb: 3 }}>
+                                <Typography
+                                  variant="h6"
+                                  sx={{ fontWeight: 700, mb: 2 }}
+                                >
+                                  Migration Risks
+                                </Typography>
+                                {aiAnalysisResults.migration_risks.map(
+                                  (risk, index) => (
+                                    <Box
+                                      key={index}
+                                      sx={{
+                                        p: 2,
+                                        mb: 2,
+                                        background:
+                                          "linear-gradient(135deg, #ffebee 0%, #fff3e0 100%)",
+                                        borderRadius: "8px",
+                                        borderLeft: "4px solid #f44336",
+                                      }}
+                                    >
+                                      <Box
+                                        sx={{
+                                          display: "flex",
+                                          justifyContent: "space-between",
+                                          alignItems: "start",
+                                          mb: 1,
+                                        }}
+                                      >
+                                        <Typography sx={{ fontWeight: 600 }}>
+                                          {risk.risk || risk.title}
+                                        </Typography>
+                                        {risk.severity && (
+                                          <Chip
+                                            label={risk.severity}
+                                            size="small"
+                                            sx={{
+                                              background:
+                                                risk.severity === "High"
+                                                  ? "#f44336"
+                                                  : risk.severity === "Medium"
+                                                    ? "#ff9800"
+                                                    : "#fbc02d",
+                                              color: "#fff",
+                                              fontWeight: 600,
+                                            }}
+                                          />
+                                        )}
+                                      </Box>
+                                      <Typography
+                                        sx={{
+                                          fontSize: "14px",
+                                          color: "#757575",
+                                        }}
+                                      >
+                                        {risk.description || risk.details}
+                                      </Typography>
+                                      {risk.mitigation && (
+                                        <Typography
+                                          sx={{
+                                            fontSize: "14px",
+                                            color: "#2e7d32",
+                                            mt: 1,
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          Mitigation: {risk.mitigation}
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  ),
+                                )}
+                              </Card>
+                            )}
+                        </Box>
+                      ) : (
+                        <Box
+                          sx={{
+                            textAlign: "center",
+                            py: 6,
+                            background:
+                              "linear-gradient(135deg, #ffebee 0%, #fff3e0 100%)",
+                            borderRadius: "8px",
+                          }}
+                        >
+                          <ErrorIcon
+                            sx={{ fontSize: 64, color: "#f44336", mb: 2 }}
+                          />
+                          <Typography sx={{ fontWeight: 600, mb: 1 }}>
+                            No AI Analysis Results
                           </Typography>
-                          <Button
-                            variant="contained"
-                            sx={{ textTransform: "none", fontWeight: 600 }}
+                          <Typography
+                            sx={{ fontSize: "14px", color: "#757575" }}
                           >
-                            View AI Insights
-                          </Button>
-                        </>
+                            Please run the AI analysis to view insights.
+                          </Typography>
+                        </Box>
                       )}
                     </Box>
                   )}

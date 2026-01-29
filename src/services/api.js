@@ -286,7 +286,7 @@ export const rulesAPI = {
   getAll: async (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
+      if (value !== undefined && value !== null && value !== "") {
         query.append(key, value);
       }
     });
@@ -323,8 +323,8 @@ export const rulesAPI = {
    * Bulk update rules
    */
   bulkUpdate: async (bulkData) => {
-    return apiRequest('/custom-rules/bulk', {
-      method: 'PATCH',
+    return apiRequest("/custom-rules/bulk", {
+      method: "PATCH",
       body: JSON.stringify(bulkData),
     });
   },
@@ -335,19 +335,22 @@ export const rulesAPI = {
   export: async (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
+      if (value !== undefined && value !== null && value !== "") {
         query.append(key, value);
       }
     });
     const apiKey = localStorage.getItem("apiKey");
-    const response = await fetch(`${API_BASE_URL}/custom-rules/export/${query.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('authToken')}`,
-        "X-API-Key": apiKey,
+    const response = await fetch(
+      `${API_BASE_URL}/custom-rules/export/${query.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+          "X-API-Key": apiKey,
+        },
       },
-    });
-    
-    if (!response.ok) throw new Error('Export failed');
+    );
+
+    if (!response.ok) throw new Error("Export failed");
     return await response.blob();
   },
 
@@ -355,8 +358,8 @@ export const rulesAPI = {
    * Import rules
    */
   import: async (importData) => {
-    return apiRequest('/custom-rules/import', {
-      method: 'POST',
+    return apiRequest("/custom-rules/import", {
+      method: "POST",
       body: JSON.stringify(importData),
     });
   },
@@ -603,14 +606,19 @@ export const analysisAPI = {
   },
 
   updateWorkflowName: async (workflowId, workflowName) => {
-    return apiRequest(`/workflows/name?workflow_id=${workflowId}&workflow_name=${workflowName}`, {
-      method: "PATCH",
-    });
+    return apiRequest(
+      `/workflows/name?workflow_id=${workflowId}&workflow_name=${workflowName}`,
+      {
+        method: "PATCH",
+      },
+    );
   },
 
   getHistory: async (projectId) => {
     const query = projectId ? `?project_id=${projectId}` : "";
-    return apiRequest(`/analyze/history${query}`);
+    const endpoint = `/analyze/history${query}`;
+    console.log(`📞 Calling API: GET ${endpoint}`);
+    return apiRequest(endpoint);
   },
 
   getWorkflowsForProject: async (projectId) => {
@@ -681,9 +689,6 @@ export const analysisAPI = {
 // ==================== Code Review APIs ====================
 
 export const codeReviewAPI = {
-
-    
-
   /**
    * Get existing code review for a workflow (intelligent caching)
    * @param {string} workflowId - Workflow ID to check
@@ -700,23 +705,32 @@ export const codeReviewAPI = {
         "Analysis requires a valid session or API Key. Please log in again.",
       );
     }
-    
+
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(workflowId)) {
-      console.error("❌ Invalid workflow ID format. Expected UUID, got:", workflowId);
-      throw new Error("Invalid workflow ID format. Please select a valid workflow.");
+      console.error(
+        "❌ Invalid workflow ID format. Expected UUID, got:",
+        workflowId,
+      );
+      throw new Error(
+        "Invalid workflow ID format. Please select a valid workflow.",
+      );
     }
-    
+
     try {
-      return await apiRequest(`/code-review?workflow_id=${encodeURIComponent(workflowId)}`, {
-        method: "GET",
-        headers: {
+      return await apiRequest(
+        `/code-review?workflow_id=${encodeURIComponent(workflowId)}`,
+        {
+          method: "GET",
+          headers: {
             // Use whichever token is available (Backend now supports both)
             Authorization: `Bearer ${authHeaderValue}`,
             "X-API-Key": apiKey,
           },
-      });
+        },
+      );
     } catch (error) {
       // Return null if no cached review found (404)
       if (error.status === 404) {
@@ -742,15 +756,49 @@ export const codeReviewAPI = {
         "Analysis requires a valid session or API Key. Please log in again.",
       );
     }
-    return apiRequest("/code-review", {
-      method: "POST",
-      headers: {
-        // Use whichever token is available (Backend now supports both)
-        Authorization: `Bearer ${authHeaderValue}`,
-        "X-API-Key": apiKey,
+
+    // Backend expects workflow_id as query parameter
+    const workflowId = reviewData.workflowId || reviewData.workflow_id;
+    return apiRequest(
+      `/code-review?workflow_id=${encodeURIComponent(workflowId)}`,
+      {
+        method: "POST",
+        headers: {
+          // Use whichever token is available (Backend now supports both)
+          Authorization: `Bearer ${authHeaderValue}`,
+          "X-API-Key": apiKey,
+        },
       },
-      body: JSON.stringify(reviewData),
-    });
+    );
+  },
+
+  /**
+   * Run AI-powered analysis on workflow
+   * @param {string} workflowId - Workflow ID to analyze
+   * @returns {Promise} AI analysis results with insights
+   */
+  runAIAnalysis: async (workflowId) => {
+    const authToken = localStorage.getItem("authToken");
+    const apiKey = localStorage.getItem("apiKey");
+    const authHeaderValue = authToken || apiKey;
+
+    if (!authHeaderValue) {
+      console.error("❌ No Authentication found in localStorage");
+      throw new Error(
+        "AI Analysis requires a valid session or API Key. Please log in again.",
+      );
+    }
+
+    return apiRequest(
+      `/code-review/ai-analysis?workflow_id=${encodeURIComponent(workflowId)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authHeaderValue}`,
+          "X-API-Key": apiKey,
+        },
+      },
+    );
   },
 
   /**

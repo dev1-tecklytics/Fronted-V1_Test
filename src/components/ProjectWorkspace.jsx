@@ -479,24 +479,40 @@ const ProjectWorkspace = () => {
         };
       });
 
-      // Calculate aggregate metrics from the processed data
-      const totalActivities = processes.reduce(
+      // Get existing analysis data to merge with new uploads
+      const existingData = analysisData || {
+        totalProcesses: 0,
+        avgComplexity: 0,
+        totalActivities: 0,
+        highRiskProcesses: 0,
+        processes: [],
+        projectId: currentProject.project_id,
+        projectName: currentProject.name,
+      };
+
+      // Merge new processes with existing ones
+      const allProcesses = [...(existingData.processes || []), ...processes];
+
+      // Calculate aggregate metrics from ALL processes (existing + new)
+      const totalActivities = allProcesses.reduce(
         (sum, p) => sum + Number(p.activities),
         0,
       );
       const avgComplexity =
-        processes.reduce((sum, p) => sum + Number(p.complexity), 0) /
-        processes.length;
-      const highRiskProcesses = processes.filter((p) =>
+        allProcesses.length > 0
+          ? allProcesses.reduce((sum, p) => sum + Number(p.complexity), 0) /
+            allProcesses.length
+          : 0;
+      const highRiskProcesses = allProcesses.filter((p) =>
         ["Very High", "Critical", "High"].includes(p.level),
       ).length;
 
       const analysisResults = {
-        totalProcesses: processes.length,
+        totalProcesses: allProcesses.length,
         avgComplexity: Math.round(avgComplexity * 10) / 10,
         totalActivities: totalActivities,
         highRiskProcesses: highRiskProcesses,
-        processes: processes,
+        processes: allProcesses,
         analyzedAt: new Date().toISOString(),
         projectId: currentProject.project_id,
         projectName: currentProject.name,
@@ -514,6 +530,9 @@ const ProjectWorkspace = () => {
       console.log(
         `💾 Analysis results saved to localStorage for project: ${currentProject.name}`,
       );
+      console.log(
+        `📊 Total workflows now: ${allProcesses.length} (added ${processes.length} new)`,
+      );
 
       setSnackbarMessage(
         `✅ ${uploadedFiles.length} file(s) analyzed successfully!`,
@@ -522,11 +541,6 @@ const ProjectWorkspace = () => {
       setOpenSnackbar(true);
       setAnalyzing(false);
       setUploadedFiles([]);
-      
-      // Refresh analysis data by re-triggering the useEffect
-      setTimeout(() => {
-        setCurrentProject({...currentProject}); // Trigger useEffect to reload analysis
-      }, 1000);
     } catch (error) {
       console.error("❌ Analysis error:", error);
       setSnackbarMessage(`❌ Analysis failed: ${error.message}`);
@@ -571,99 +585,187 @@ const ProjectWorkspace = () => {
 
   const loadProjectAnalysis = async () => {
     if (currentProject?.project_id) {
-      console.log("📂 Loading analysis for project:", currentProject.name, currentProject.project_id);
+      console.log(
+        "📂 Loading analysis for project:",
+        currentProject.name,
+        currentProject.project_id,
+      );
       localStorage.setItem("activeProjectId", currentProject.project_id);
       localStorage.setItem("currentProject", JSON.stringify(currentProject));
 
+      // First, try to load from localStorage (for immediate data after upload)
+      const localStorageKey = `project_${currentProject.project_id}_analysis`;
+      const cachedData = localStorage.getItem(localStorageKey);
+
+      if (cachedData) {
+        try {
+          const parsedData = JSON.parse(cachedData);
+          console.log("✅ Loaded analysis from localStorage cache");
+          setAnalysisData(parsedData);
+          // Continue to fetch from backend to get latest data
+        } catch (e) {
+          console.error("Error parsing cached analysis data:", e);
+        }
+      }
+
       try {
-        const history = await analysisAPI.getHistory(
-          currentProject.project_id,
+        console.log(
+          `🔍 Fetching workflow history from backend for project: ${currentProject.project_id}`,
+        );
+        const history = await analysisAPI.getHistory(currentProject.project_id);
+
+        console.log(`📡 Backend response for getHistory:`, history);
+        console.log(
+          `📊 History type: ${typeof history}, Is Array: ${Array.isArray(history)}, Length: ${history?.length}`,
         );
 
         if (history && history.length > 0) {
-          const completedAnalyses = history.filter(
-            (h) => {
-              return (h.status === "completed" || h.status === "COMPLETED") && (h.metrics || h.complexity);
-            }
+          console.log(
+            `📊 Found ${history.length} workflows in history for project ${currentProject.name}`,
           );
-          
-          if (completedAnalyses.length > 0) {
-            const processes = completedAnalyses.map((h) => {
-              const r = h;
 
-              let complexityScore = 50;
-              let complexityLevel = "Medium";
+          // Show ALL workflows, not just completed ones
+          // This ensures users see their previously uploaded workflows when they log back in
+          const processes = history.map((h, index) => {
+            // Log the raw backend data to understand the structure
+            if (index === 0) {
+              console.log(
+                "📋 Sample backend workflow data:",
+                JSON.stringify(h, null, 2),
+              );
+            }
 
-              console.log("fff: "+r.workflowName)
+            const r = h;
 
-              if (r.complexity && typeof r.complexity === "object") {
-                complexityScore = r.complexity.score || 50;
-                complexityLevel = r.complexity.level || "Medium";
-              } else {
-                complexityScore = r.complexity || 50;
-                complexityLevel = complexityScore > 80 ? "High" : complexityScore > 50 ? "Medium" : "Low";
-              }
+            // Handle complexity - try multiple possible field structures
+            let complexityScore = 50;
+            let complexityLevel = "Medium";
 
-              return {
-                name:
-                  r.workflowName ||
-                  r.name ||
-                  h.file_name?.replace(/\.(xaml|bp|xml)$/i, "") ||
-                  "Unknown",
-                platform: currentProject.platform,
-                complexity: complexityScore,
-                level: complexityLevel,
-                activities: r.metrics?.activity_count || 0,
-                effort: ((r.metrics?.activity_count || 0) * 0.4).toFixed(1),
-                risks: r.code_review?.findings?.map(f => f.message) || ["No issues found"],
-                workflow_id: r.workflow_id || r.id,
-                fullAnalysis: {
-                  ...r,
-                  analysis: {
-                    activity_breakdown: r.activity_breakdown || {
-                      Other: r.metrics?.activity_count || 0,
-                    },
-                  },
+            // Try different backend response formats
+            if (r.complexityScore !== undefined) {
+              complexityScore = r.complexityScore;
+            } else if (r.complexity && typeof r.complexity === "object") {
+              complexityScore =
+                r.complexity.score || r.complexity.complexityScore || 50;
+              complexityLevel =
+                r.complexity.level || r.complexity.complexityLevel || "Medium";
+            } else if (r.complexity !== undefined) {
+              complexityScore = r.complexity;
+            }
+
+            // Determine level from score if not provided
+            if (r.complexityLevel) {
+              complexityLevel = r.complexityLevel;
+            } else {
+              complexityLevel =
+                complexityScore > 80
+                  ? "High"
+                  : complexityScore > 50
+                    ? "Medium"
+                    : "Low";
+            }
+
+            // Handle activities - try multiple possible field names
+            const activities =
+              r.totalActivities ||
+              r.activities ||
+              r.metrics?.activity_count ||
+              r.metrics?.totalActivities ||
+              r.result?.totalActivities ||
+              0;
+
+            // Handle effort estimation
+            const effort =
+              r.estimatedEffortHours ||
+              r.effort ||
+              r.metrics?.effort ||
+              (activities * 0.4).toFixed(1);
+
+            // Handle risks/issues
+            const risks = r.riskIndicators ||
+              r.risks ||
+              r.code_review?.findings?.map((f) => f.message) ||
+              r.issues || ["No issues found"];
+
+            // Handle activity breakdown
+            const activityBreakdown = r.activityBreakdown ||
+              r.activity_breakdown ||
+              r.result?.activityBreakdown ||
+              r.analysis?.activity_breakdown || { Other: activities };
+
+            const processData = {
+              name:
+                r.workflowName ||
+                r.name ||
+                h.file_name?.replace(/\.(xaml|bp|xml)$/i, "") ||
+                "Unknown",
+              platform: r.platform || currentProject.platform,
+              complexity: complexityScore,
+              level: complexityLevel,
+              activities: activities,
+              effort: effort,
+              risks: Array.isArray(risks) ? risks : [risks],
+              workflow_id: r.workflow_id || r.id,
+              analyzedDate:
+                r.analyzedAt ||
+                r.analyzed_at ||
+                r.createdAt ||
+                new Date().toLocaleString(),
+              fullAnalysis: {
+                ...r,
+                analysis: {
+                  activity_breakdown: activityBreakdown,
                 },
-              };
-            });
-
-            const totalActivities = processes.reduce(
-              (sum, p) => sum + Number(p.activities),
-              0,
-            );
-            const avgComplexity =
-              processes.length > 0
-                ? processes.reduce(
-                    (sum, p) => sum + Number(p.complexity),
-                    0,
-                  ) / processes.length
-                : 0;
-            const highRiskProcesses = processes.filter((p) =>
-              ["High", "Very High", "Critical"].includes(p.level),
-            ).length;
-
-            const aggregatedData = {
-              totalProcesses: processes.length,
-              avgComplexity: Math.round(avgComplexity * 10) / 10,
-              totalActivities: totalActivities,
-              highRiskProcesses: highRiskProcesses,
-              processes: processes,
-              analyzedAt: new Date().toISOString(),
-              projectId: currentProject.project_id,
-              projectName: currentProject.name,
+              },
             };
 
-            setAnalysisData(aggregatedData);
-            setShowResults(false);
-          } else {
-            setAnalysisData(null);
-            setShowResults(false);
-          }
-        } else {
-          setAnalysisData(null);
+            // Log the mapped process data for debugging
+            if (index === 0) {
+              console.log(
+                "📊 Mapped process data:",
+                JSON.stringify(processData, null, 2),
+              );
+            }
+
+            return processData;
+          });
+
+          const totalActivities = processes.reduce(
+            (sum, p) => sum + Number(p.activities),
+            0,
+          );
+          const avgComplexity =
+            processes.length > 0
+              ? processes.reduce((sum, p) => sum + Number(p.complexity), 0) /
+                processes.length
+              : 0;
+          const highRiskProcesses = processes.filter((p) =>
+            ["High", "Very High", "Critical"].includes(p.level),
+          ).length;
+
+          const aggregatedData = {
+            totalProcesses: processes.length,
+            avgComplexity: Math.round(avgComplexity * 10) / 10,
+            totalActivities: totalActivities,
+            highRiskProcesses: highRiskProcesses,
+            processes: processes,
+            analyzedAt: new Date().toISOString(),
+            projectId: currentProject.project_id,
+            projectName: currentProject.name,
+          };
+
+          setAnalysisData(aggregatedData);
+
+          // Update localStorage with latest data from backend
+          localStorage.setItem(localStorageKey, JSON.stringify(aggregatedData));
+          console.log("💾 Updated localStorage with latest backend data");
+
           setShowResults(false);
-          setUploadedFiles([]);
+        } else {
+          // Only clear if we don't already have cached data
+          if (!cachedData) {
+            console.log("No history found for project");
+          }
         }
       } catch (error) {
         if (error.status === 404) {
@@ -673,19 +775,19 @@ const ProjectWorkspace = () => {
         } else {
           console.error("Failed to load project analysis:", error);
         }
-        setAnalysisData(null);
-        setShowResults(false);
+        // Don't clear existing analysis data on error
+        console.log("Keeping existing analysis data (from cache or state)");
       }
     }
   };
 
   const handleOnWorkflowDelete = async () => {
     await loadProjectAnalysis();
-  }
+  };
 
   const handleOnWorkflowUpdate = async () => {
     await loadProjectAnalysis();
-  }
+  };
 
   const handleRefresh = async () => {
     console.log("🔄 Refreshing workspace...");
@@ -1197,28 +1299,30 @@ const ProjectWorkspace = () => {
 
         {/* Empty State or File List */}
         {uploadedFiles.length === 0 ? (
-          (!analysisData) ? (
-          <EmptyStateCard>
-            <Typography
-              variant="body1"
-              sx={{
-                color: "#757575",
-              }}
-            >
-              No workflows analyzed yet. Upload your workflow files to get
-              started.
-            </Typography>
-          </EmptyStateCard> ) : (
+          !analysisData ? (
+            <EmptyStateCard>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "#757575",
+                }}
+              >
+                No workflows analyzed yet. Upload your workflow files to get
+                started.
+              </Typography>
+            </EmptyStateCard>
+          ) : (
             <Card sx={{ mt: 3, p: 3 }}>
-            <AnalysisResults
-            analysisData={analysisData}
-            onViewDetail={handleViewDetail}
-            setSnackbarMessage= {setSnackbarMessage}
-            setSnackbarSeverity = {setSnackbarSeverity}
-            setOpenSnackbar = {setOpenSnackbar}
-            onDelete = {handleOnWorkflowDelete}
-            onWorkflowUpdated = {handleOnWorkflowUpdate}
-          /></Card>
+              <AnalysisResults
+                analysisData={analysisData}
+                onViewDetail={handleViewDetail}
+                setSnackbarMessage={setSnackbarMessage}
+                setSnackbarSeverity={setSnackbarSeverity}
+                setOpenSnackbar={setOpenSnackbar}
+                onDelete={handleOnWorkflowDelete}
+                onWorkflowUpdated={handleOnWorkflowUpdate}
+              />
+            </Card>
           )
         ) : (
           <Card sx={{ mt: 3, p: 3 }}>

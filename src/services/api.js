@@ -756,11 +756,11 @@ export const codeReviewAPI = {
         "Analysis requires a valid session or API Key. Please log in again.",
       );
     }
-
+    console.log(reviewData)
     // Backend expects workflow_id as query parameter
     const workflowId = reviewData.workflowId || reviewData.workflow_id;
     return apiRequest(
-      `/code-review?workflow_id=${encodeURIComponent(workflowId)}`,
+      `/code-review?workflow_id=${encodeURIComponent(workflowId)}&platform=${reviewData.platform}`,
       {
         method: "POST",
         headers: {

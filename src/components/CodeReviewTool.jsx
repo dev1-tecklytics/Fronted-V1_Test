@@ -893,7 +893,7 @@ const CodeReviewTool = () => {
                   }}
                 >
                   <Grow in={true} timeout={600}>
-                    <GradeCard grade={reviewResults.qualityGrade}>
+                    <GradeCard grade={reviewResults.grade}>
                       <Typography
                         sx={{ fontSize: "14px", color: "#757575", mb: 1 }}
                       >
@@ -906,12 +906,12 @@ const CodeReviewTool = () => {
                           lineHeight: 1,
                         }}
                       >
-                        {reviewResults.qualityGrade}
+                        {reviewResults.grade}
                       </Typography>
                       <Typography
                         sx={{ fontSize: "14px", color: "#757575", mt: 1 }}
                       >
-                        Score: {reviewResults.qualityScore}/100
+                        Score: {reviewResults.overall_score}/100
                       </Typography>
                     </GradeCard>
                   </Grow>

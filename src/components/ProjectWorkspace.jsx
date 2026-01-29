@@ -628,12 +628,12 @@ const ProjectWorkspace = () => {
           // This ensures users see their previously uploaded workflows when they log back in
           const processes = history.map((h, index) => {
             // Log the raw backend data to understand the structure
-            if (index === 0) {
-              console.log(
-                "📋 Sample backend workflow data:",
-                JSON.stringify(h, null, 2),
-              );
-            }
+            // if (index === 0) {
+            //   console.log(
+            //     "📋 Sample backend workflow data:",
+            //     JSON.stringify(h, null, 2),
+            //   );
+            // }
 
             const r = h;
 
@@ -703,6 +703,7 @@ const ProjectWorkspace = () => {
               complexity: complexityScore,
               level: complexityLevel,
               activities: activities,
+              activityBreakdown:activityBreakdown,
               effort: effort,
               risks: Array.isArray(risks) ? risks : [risks],
               workflow_id: r.workflow_id || r.id,
@@ -714,17 +715,17 @@ const ProjectWorkspace = () => {
               fullAnalysis: {
                 ...r,
                 analysis: {
-                  activity_breakdown: activityBreakdown,
+                  activityBreakdown: activityBreakdown,
                 },
               },
             };
 
             // Log the mapped process data for debugging
             if (index === 0) {
-              console.log(
-                "📊 Mapped process data:",
-                JSON.stringify(processData, null, 2),
-              );
+              // console.log(
+              //   "📊 Mapped process data:",
+              //   JSON.stringify(processData, null, 2),
+              // );
             }
 
             return processData;

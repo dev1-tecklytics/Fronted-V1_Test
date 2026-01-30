@@ -720,17 +720,19 @@ export const codeReviewAPI = {
     }
 
     try {
-      return await apiRequest(
+      const response = await apiRequest(
         `/code-review?workflow_id=${encodeURIComponent(workflowId)}`,
         {
           method: "GET",
           headers: {
-            // Use whichever token is available (Backend now supports both)
             Authorization: `Bearer ${authHeaderValue}`,
             "X-API-Key": apiKey,
           },
         },
       );
+
+      // Backend returns { message, review } - extract review
+      return response?.review || response;
     } catch (error) {
       // Return null if no cached review found (404)
       if (error.status === 404) {
@@ -742,6 +744,7 @@ export const codeReviewAPI = {
 
   /**
    * Run new code review analysis
+   * Backend: POST /api/v1/code-review with JSON body { workflowId, platform }
    * @param {Object} reviewData - { workflowId, platform }
    * @returns {Promise} Code review results
    */
@@ -756,28 +759,36 @@ export const codeReviewAPI = {
         "Analysis requires a valid session or API Key. Please log in again.",
       );
     }
-    console.log(reviewData)
-    // Backend expects workflow_id as query parameter
-    const workflowId = reviewData.workflowId || reviewData.workflow_id;
-    return apiRequest(
-      `/code-review?workflow_id=${encodeURIComponent(workflowId)}&platform=${reviewData.platform}`,
-      {
-        method: "POST",
-        headers: {
-          // Use whichever token is available (Backend now supports both)
-          Authorization: `Bearer ${authHeaderValue}`,
-          "X-API-Key": apiKey,
-        },
+
+    console.log("📤 Sending code review request:", reviewData);
+
+    // Backend expects JSON body with workflowId and platform
+    const response = await apiRequest("/code-review", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authHeaderValue}`,
+        "X-API-Key": apiKey,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        workflowId: reviewData.workflowId || reviewData.workflow_id,
+        platform: reviewData.platform,
+      }),
+    });
+
+    console.log("✅ Code review response:", response);
+
+    // Backend returns { message, review } - extract review
+    return response?.review || response;
   },
 
   /**
-   * Run AI-powered analysis on workflow
-   * @param {string} workflowId - Workflow ID to analyze
+   * Run AI-powered analysis on a code review
+   * Backend: POST /api/v1/code-review/{review_id}/ai-analysis
+   * @param {string} reviewId - Review ID (not workflow ID!)
    * @returns {Promise} AI analysis results with insights
    */
-  runAIAnalysis: async (workflowId) => {
+  runAIAnalysis: async (reviewId) => {
     const authToken = localStorage.getItem("authToken");
     const apiKey = localStorage.getItem("apiKey");
     const authHeaderValue = authToken || apiKey;
@@ -789,8 +800,11 @@ export const codeReviewAPI = {
       );
     }
 
-    return apiRequest(
-      `/code-review/ai-analysis?workflow_id=${encodeURIComponent(workflowId)}`,
+    console.log("🤖 Running AI analysis for review:", reviewId);
+
+    // Backend expects review ID in path (not workflow ID!)
+    const response = await apiRequest(
+      `/code-review/${encodeURIComponent(reviewId)}/ai-analysis`,
       {
         method: "POST",
         headers: {
@@ -799,6 +813,55 @@ export const codeReviewAPI = {
         },
       },
     );
+
+    console.log("✅ AI analysis response:", response);
+
+    // Backend returns { message, analysis, summary } - extract analysis
+    return response?.analysis || response;
+  },
+
+  /**
+   * Get AI analysis by review ID (for caching)
+   * Backend: GET /api/v1/code-review/ai-analysis?review_id={id}
+   * @param {string} reviewId - Review ID
+   * @returns {Promise} AI analysis results or null
+   */
+  getAIAnalysis: async (reviewId) => {
+    const authToken = localStorage.getItem("authToken");
+    const apiKey = localStorage.getItem("apiKey");
+    const authHeaderValue = authToken || apiKey;
+
+    if (!authHeaderValue) {
+      console.error("❌ No Authentication found in localStorage");
+      throw new Error(
+        "AI Analysis requires a valid session or API Key. Please log in again.",
+      );
+    }
+
+    try {
+      const response = await apiRequest(
+        `/code-review/ai-analysis?review_id=${encodeURIComponent(reviewId)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authHeaderValue}`,
+            "X-API-Key": apiKey,
+          },
+        },
+      );
+
+      // Backend returns { message, analysis } - extract analysis
+      return response?.analysis || response;
+    } catch (error) {
+      // Return null if no AI analysis found (404) or endpoint not implemented (422)
+      if (error.status === 404 || error.status === 422) {
+        console.log(
+          "ℹ️ No cached AI analysis available (or endpoint not implemented)",
+        );
+        return null;
+      }
+      throw error;
+    }
   },
 
   /**
@@ -817,12 +880,14 @@ export const codeReviewAPI = {
    * @returns {Promise<Blob>} CSV file blob
    */
   exportToCSV: async (reviewId) => {
+    const apiKey = localStorage.getItem("apiKey");
     const response = await fetch(
       `${API_BASE_URL}/code-review/${reviewId}/export`,
       {
         method: "GET",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+          "X-API-Key": apiKey,
         },
       },
     );

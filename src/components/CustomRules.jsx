@@ -596,7 +596,7 @@ const CustomRules = () => {
                                 rows={3}
                                 placeholder="Describe what this rule checks for..."
                                 fullWidth
-                                defaultValue={currentRule?.config?.description || ''}
+                                defaultValue={currentRule?.description || ''}
                             />
 
                             <TextField
@@ -607,7 +607,7 @@ const CustomRules = () => {
                                 rows={3}
                                 placeholder="Provide guidance on how to fix violations..."
                                 fullWidth
-                                defaultValue={currentRule?.config?.recommendation || ''}
+                                defaultValue={currentRule?.recommendation || ''}
                             />
 
                             <TextField

@@ -23,7 +23,7 @@ import {
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
-import { apiKeyAPI } from "../services/api";
+import { apiKeyAPI, API_BASE_URL } from "../services/api";
 
 // Styled components with modern aesthetics
 const StyledCard = styled(Card)(({ theme }) => ({
@@ -174,7 +174,7 @@ const Login = () => {
     }
 
     try {
-      const apiUrl = `${import.meta.env.VITE_API_BASE_URL}/auth/login`;
+      const apiUrl = `${API_BASE_URL}/auth/login`;
       console.log("🔐 Attempting login...");
       console.log("📍 API URL:", apiUrl);
       console.log("📧 Email:", formData.email);
@@ -253,7 +253,7 @@ const Login = () => {
       // Fetch projects to determine where to redirect
       try {
         const projectsResponse = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/projects`,
+          `${API_BASE_URL}/projects`,
           {
             headers: {
               Authorization: `Bearer ${data.access_token}`,

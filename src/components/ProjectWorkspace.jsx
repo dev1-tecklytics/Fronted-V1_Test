@@ -452,18 +452,32 @@ const ProjectWorkspace = () => {
 
       console.log("✅ Upload results:", uploadResults);
 
-      const processes = uploadResults.map((result, index) => {
+      const processes = uploadResults.map((rawResult, index) => {
         const fileName = uploadedFiles[index].name;
+
+        // Unwrap the response if the backend returned it nested under 'analysis'
+        const result = rawResult.analysis || rawResult;
 
         return {
           name:
             result.workflowName?.replace(/\.(xaml|bp|xml)$/i, "") || fileName,
+          file: result.workflowName || fileName,
+          project: currentProject?.name || "N/A",
           platform: result.platform || currentProject?.platform || "Unknown",
 
           complexity: result.complexityScore || 0,
           level: result.complexityLevel || "Low",
           activities: result.totalActivities || 0,
           effort: result.estimatedEffortHours || 0,
+
+          // Metadata fields from backend
+          nestingDepth: result.nestingDepth || 0,
+          variables: result.variableCount ?? (Array.isArray(result.variables) ? result.variables.length : 0),
+          argumentCount: result.argumentCount || 0,
+          invokedWorkflows: result.invokedWorkflowCount ?? (Array.isArray(result.invokedWorkflows) ? result.invokedWorkflows.length : 0),
+          exceptionHandlers: result.exceptionHandlers || 0,
+          customCode: result.hasCustomCode || false,
+          compatibilityScore: result.compatibilityScore || 0,
 
           risks: result.riskIndicators || [],
           workflow_id: result.id,
@@ -503,9 +517,10 @@ const ProjectWorkspace = () => {
           ? allProcesses.reduce((sum, p) => sum + Number(p.complexity), 0) /
             allProcesses.length
           : 0;
-      const highRiskProcesses = allProcesses.filter((p) =>
-        ["Very High", "Critical", "High"].includes(p.level),
-      ).length;
+      const highRiskProcesses = allProcesses.filter((p) => {
+        const lvl = (p.level || "").toString().trim().toLowerCase();
+        return ["very high", "critical", "high"].includes(lvl);
+      }).length;
 
       const analysisResults = {
         totalProcesses: allProcesses.length,
@@ -635,7 +650,8 @@ const ProjectWorkspace = () => {
             //   );
             // }
 
-            const r = h;
+            // Unwrap if it is nested
+            const r = h.analysis || h;
 
             // Handle complexity - try multiple possible field structures
             let complexityScore = 50;
@@ -693,18 +709,34 @@ const ProjectWorkspace = () => {
               r.result?.activityBreakdown ||
               r.analysis?.activity_breakdown || { Other: activities };
 
+            // Resolve variable count (backend sends both variableCount and variables array)
+            const variableCount = r.variableCount ?? r.variable_count ?? (Array.isArray(r.variables) ? r.variables.length : (typeof r.variables === 'number' ? r.variables : 0));
+            const invokedWorkflowCount = r.invokedWorkflowCount ?? r.invoked_workflow_count ?? (Array.isArray(r.invokedWorkflows) ? r.invokedWorkflows.length : (typeof r.invokedWorkflows === 'number' ? r.invokedWorkflows : 0));
+
             const processData = {
               name:
                 r.workflowName ||
                 r.name ||
                 h.file_name?.replace(/\.(xaml|bp|xml)$/i, "") ||
                 "Unknown",
+              file: r.workflowName || h.file_name || "",
+              project: currentProject.name || "N/A",
               platform: r.platform || currentProject.platform,
               complexity: complexityScore,
               level: complexityLevel,
               activities: activities,
-              activityBreakdown:activityBreakdown,
+              activityBreakdown: activityBreakdown,
               effort: effort,
+
+              // Metadata fields from backend
+              nestingDepth: r.nestingDepth || r.nesting_depth || 0,
+              variables: variableCount,
+              argumentCount: r.argumentCount || r.argument_count || 0,
+              invokedWorkflows: invokedWorkflowCount,
+              exceptionHandlers: r.exceptionHandlers || r.exception_handlers || 0,
+              customCode: r.hasCustomCode || r.has_custom_code || false,
+              compatibilityScore: r.compatibilityScore || r.compatibility_score || 0,
+
               risks: Array.isArray(risks) ? risks : [risks],
               workflow_id: r.workflow_id || r.id,
               analyzedDate:
@@ -740,9 +772,10 @@ const ProjectWorkspace = () => {
               ? processes.reduce((sum, p) => sum + Number(p.complexity), 0) /
                 processes.length
               : 0;
-          const highRiskProcesses = processes.filter((p) =>
-            ["High", "Very High", "Critical"].includes(p.level),
-          ).length;
+          const highRiskProcesses = processes.filter((p) => {
+            const lvl = (p.level || "").toString().trim().toLowerCase();
+            return ["very high", "critical", "high"].includes(lvl);
+          }).length;
 
           const aggregatedData = {
             totalProcesses: processes.length,

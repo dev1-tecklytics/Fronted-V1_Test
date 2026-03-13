@@ -4,8 +4,8 @@
  */
 
 // Base URL for the API - Update this to match your Python backend URL
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+export const API_BASE_URL = "http://localhost:8080/api/v1";
+// import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api/v1";
 
 console.log("🌐 API_BASE_URL:", API_BASE_URL);
 
@@ -582,7 +582,11 @@ export const analysisAPI = {
       }
 
       const result = await response.json();
-      return result;
+      console.log("✅ Upload successful:", result);
+      
+      // The backend returns { "success": true, "analysis": { ... } }
+      // We need to unwrap the 'analysis' object for the frontend to use it
+      return result.analysis || result;
     } catch (error) {
       console.error("❌ Upload error:", error);
       throw error;

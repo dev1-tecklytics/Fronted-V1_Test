@@ -292,28 +292,28 @@ const AnalysisResults = ({ analysisData, onViewDetail, onDelete,
                 data={[
                   {
                     name: "Low",
-                    value: analysisData.processes.filter(
-                      (p) => p.level === "Low",
+                    value: analysisData.processes.filter((p) =>
+                      (p.level || "").toString().trim().toLowerCase() === "low"
                     ).length,
                   },
                   {
                     name: "Medium",
-                    value: analysisData.processes.filter(
-                      (p) => p.level === "Medium",
+                    value: analysisData.processes.filter((p) =>
+                      (p.level || "").toString().trim().toLowerCase() === "medium"
                     ).length,
                   },
                   {
                     name: "High",
-                    value: analysisData.processes.filter(
-                      (p) => p.level === "High",
+                    value: analysisData.processes.filter((p) =>
+                      (p.level || "").toString().trim().toLowerCase() === "high"
                     ).length,
                   },
                   {
                     name: "Very High",
-                    value: analysisData.processes.filter(
-                      (p) =>
-                        p.level === "Very High" || p.level === "Critical",
-                    ).length,
+                    value: analysisData.processes.filter((p) => {
+                      const lvl = (p.level || "").toString().trim().toLowerCase();
+                      return lvl === "very high" || lvl === "critical";
+                    }).length,
                   },
                 ]}
               >

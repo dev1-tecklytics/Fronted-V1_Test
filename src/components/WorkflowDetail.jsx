@@ -267,6 +267,11 @@ const WorkflowDetail = () => {
   );
   const avgEffort = Number(fullAnalysis?.migration?.estimated_days || 0);
 
+  // Mapped unrendered fields
+  const llmInsights = fullAnalysis?.llmInsights || null;
+  const activitiesList = fullAnalysis?.activities || [];
+  const variablesList = fullAnalysis?.variables || [];
+
   return (
     <Box sx={{ minHeight: "100vh", background: "#fafbfc" }}>
       {/* App Bar */}
@@ -918,6 +923,140 @@ const WorkflowDetail = () => {
             </Accordion>
           ))}
         </Card>
+
+        {/* Gemini LLM Insights */}
+        {llmInsights && (
+          <Card sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0", mb: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+              <LightbulbIcon sx={{ color: "#9c27b0", fontSize: 28 }} />
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Google Gemini AI Insights
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ color: "#424242", mb: 3 }}>
+              {llmInsights.summary}
+            </Typography>
+
+            {llmInsights.risks?.length > 0 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Identified Risks:</Typography>
+                <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                  {llmInsights.risks.map((risk, i) => <li key={i}>{risk}</li>)}
+                </ul>
+              </Alert>
+            )}
+
+            {llmInsights.optimizationSuggestions?.length > 0 && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Optimization Suggestions:</Typography>
+                <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                  {llmInsights.optimizationSuggestions.map((opt, i) => <li key={i}>{opt}</li>)}
+                </ul>
+              </Alert>
+            )}
+
+            {llmInsights.migrationNotes?.length > 0 && (
+              <Alert severity="success">
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Migration Notes:</Typography>
+                <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                  {llmInsights.migrationNotes.map((note, i) => <li key={i}>{note}</li>)}
+                </ul>
+              </Alert>
+            )}
+          </Card>
+        )}
+
+        {/* Variables List */}
+        {variablesList.length > 0 && (
+          <Card sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0", mb: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+              <DataIcon sx={{ color: "#4caf50", fontSize: 28 }} />
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Variables Catalog
+              </Typography>
+            </Box>
+            <TableContainer component={Paper} sx={{ boxShadow: "none", border: "1px solid #f0f0f0" }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ background: "#fafafa" }}>
+                    <TableCell sx={{ fontWeight: 600 }}>Variable Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Direction</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Default Value</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {variablesList.map((row, index) => (
+                    <TableRow key={index} hover>
+                      <TableCell>
+                        <Typography component="code" sx={{ bgcolor: '#f5f5f5', px: 1, py: 0.5, borderRadius: 1 }}>
+                          {row.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell><Chip label={row.variableType || 'N/A'} size="small" sx={{ background: "#e8f5e9", color: "#2e7d32", fontWeight: 600 }} /></TableCell>
+                      <TableCell>{row.direction || 'Local'}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="textSecondary" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.defaultValue || '-'}>
+                          {row.defaultValue || '-'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Card>
+        )}
+
+        {/* Detailed Activities List */}
+        {activitiesList.length > 0 && (
+          <Card sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0", mb: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+              <TreeIcon sx={{ color: "#2196f3", fontSize: 28 }} />
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Detailed Execution Flow (Top 100 Activities)
+              </Typography>
+            </Box>
+            <TableContainer component={Paper} sx={{ boxShadow: "none", border: "1px solid #f0f0f0", maxHeight: 500 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>Activity Tree</TableCell>
+                    <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>Component Type</TableCell>
+                    <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>Category</TableCell>
+                    <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>Level</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {activitiesList.slice(0, 100).map((row, index) => (
+                    <TableRow key={index} hover>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', pl: (row.nestedLevel || 0) * 2 }}>
+                          <TreeIcon sx={{ fontSize: 16, mr: 1, color: '#bcbcbc' }} />
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {row.displayName || row.activityType}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell><Chip label={row.activityType || 'N/A'} size="small" variant="outlined" /></TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="textSecondary">{row.activityCategory || 'Other'}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={`Lvl ${row.nestedLevel || 0}`} size="small" sx={{ fontSize: '11px', height: '20px' }} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {activitiesList.length > 100 && (
+              <Typography variant="caption" sx={{ color: "#757575", display: "block", mt: 1, textAlign: "center" }}>
+                Showing first 100 activities. Total activities: {activitiesList.length}
+              </Typography>
+            )}
+          </Card>
+        )}
 
         {/* Bottom Navigation Buttons */}
         <Box

@@ -24,6 +24,7 @@ import {
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../services/api";
 
 // Styled components with modern aesthetics
 const StyledCard = styled(Card)(({ theme }) => ({
@@ -189,7 +190,7 @@ const Signup = () => {
     }
 
     try {
-      const apiUrl = `${import.meta.env.VITE_API_BASE_URL}/auth/register`;
+      const apiUrl = `${API_BASE_URL}/auth/register`;
       console.log("📝 Attempting signup...");
       console.log("📍 API URL:", apiUrl);
       console.log("📧 Email:", formData.email);
@@ -248,45 +249,55 @@ const Signup = () => {
       console.log("👤 User data stored");
 
       setSnackbarMessage(
-        "✅ Account created successfully! Redirecting to dashboard...",
+        data.access_token 
+          ? "✅ Account created successfully! Redirecting to dashboard..."
+          : "✅ Account created successfully! Redirecting to login..."
       );
       setOpenSnackbar(true);
 
-      // Fetch projects to determine where to redirect (though unlikely for a new user, good for consistency)
-      try {
-        const projectsResponse = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/projects`,
-          {
-            headers: {
-              Authorization: `Bearer ${data.access_token}`,
-              "X-API-Key": apiKey,
+      // If we received an access token, we can check projects and redirect to dashboard/workspace
+      if (data.access_token) {
+        try {
+          const projectsResponse = await fetch(
+            `${API_BASE_URL}/projects`,
+            {
+              headers: {
+                Authorization: `Bearer ${data.access_token}`,
+                "X-API-Key": apiKey,
+              },
             },
-          },
-        );
-        const projects = await projectsResponse.json();
+          );
+          const projects = await projectsResponse.json();
 
-        // Redirect based on project count
-        setTimeout(() => {
-          if (projects && projects.length > 0) {
-            console.log(
-              "🚀 Existing user with projects. Redirecting to workspace...",
-            );
-            localStorage.setItem("currentProject", JSON.stringify(projects[0]));
-            localStorage.setItem("activeProjectId", projects[0].project_id);
-            navigate("/workspace");
-          } else {
-            console.log("🚀 New user. Redirecting to dashboard...");
+          // Redirect based on project count
+          setTimeout(() => {
+            if (projects && projects.length > 0) {
+              console.log(
+                "🚀 Existing user with projects. Redirecting to workspace...",
+              );
+              localStorage.setItem("currentProject", JSON.stringify(projects[0]));
+              localStorage.setItem("activeProjectId", projects[0].project_id);
+              navigate("/workspace");
+            } else {
+              console.log("🚀 New user. Redirecting to dashboard...");
+              navigate("/dashboard");
+            }
+          }, 2000);
+        } catch (projectError) {
+          console.error(
+            "❌ Error fetching projects during signup:",
+            projectError,
+          );
+          // Fallback to dashboard
+          setTimeout(() => {
             navigate("/dashboard");
-          }
-        }, 2000);
-      } catch (projectError) {
-        console.error(
-          "❌ Error fetching projects during signup:",
-          projectError,
-        );
-        // Fallback to dashboard
+          }, 2000);
+        }
+      } else {
+        // If no token was returned, the user needs to login
         setTimeout(() => {
-          navigate("/dashboard");
+          console.log("🚀 New user registered without token. Redirecting to login...");
+          navigate("/");
         }, 2000);
       }
     } catch (error) {

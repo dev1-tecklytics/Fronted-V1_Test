@@ -38,6 +38,7 @@ import {
   Info as InfoIcon,
   Cached as CachedIcon,
   Speed as SpeedIcon,
+  Settings as SettingsIcon,
 } from "@mui/icons-material";
 import { CircularProgress } from "@mui/material";
 import { styled, keyframes } from "@mui/material/styles";
@@ -75,6 +76,13 @@ const PageContainer = styled(Box)(({ theme }) => ({
 const Header = styled(Box)(({ theme }) => ({
   marginBottom: "32px",
   animation: `${fadeIn} 0.5s ease-out`,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  [theme.breakpoints.down("sm")]: {
+    flexDirection: "column",
+    gap: "16px",
+  },
 }));
 
 const BackButton = styled(Button)(({ theme }) => ({
@@ -468,8 +476,8 @@ const CodeReviewTool = () => {
   const fetchExistingReview = async () => {
     try {
       console.log("🔍 Checking for cached review...");
-      const cachedReview =
-        await codeReviewAPI.getExistingReview(selectedWorkflow);
+      const response = await codeReviewAPI.getExistingReview(selectedWorkflow);
+      const cachedReview = response?.review || response;
 
       if (cachedReview) {
         console.log("✅ Cached review found!");
@@ -487,11 +495,25 @@ const CodeReviewTool = () => {
 
         setReviewResults(transformedCachedReview);
         setIsCached(true);
+
+        if (response?.aiAnalysis) {
+          console.log("✅ Cached AI Analysis found alongside review!");
+          setAiAnalysisResults({
+            analysis: response.aiAnalysis,
+            summary: response.summary,
+          });
+          setAiInsightsAvailable(true);
+        } else {
+          setAiAnalysisResults(null);
+          setAiInsightsAvailable(false);
+        }
       } else {
         console.log("ℹ️ No cached review found");
         setReviewResults(null);
         setCurrentReviewId(null);
         setIsCached(false);
+        setAiAnalysisResults(null);
+        setAiInsightsAvailable(false);
       }
     } catch (error) {
       console.error("Error fetching cached review:", error);
@@ -513,12 +535,13 @@ const CodeReviewTool = () => {
       const workflow = workflows.find((wf) => wf.id === selectedWorkflow);
 
       console.log("📤 Sending code review request to backend...");
-      const results = await codeReviewAPI.runReview({
+      const response = await codeReviewAPI.runReview({
         workflowId: selectedWorkflow,
         platform: workflow?.platform || selectedPlatform,
       });
 
-      console.log("✅ Code review completed (raw):", results);
+      console.log("✅ Code review completed (raw):", response);
+      const results = response?.review || response;
 
       // Transform the results to match expected structure
       const transformedResults = transformReviewResults(results);
@@ -537,159 +560,26 @@ const CodeReviewTool = () => {
       }
 
       setReviewResults(transformedResults);
-      setAiInsightsAvailable(false);
+
+      if (response?.aiAnalysis) {
+        console.log("✅ AI Analysis completed and attached with review");
+        setAiAnalysisResults({
+          analysis: response.aiAnalysis,
+          summary: response.summary,
+        });
+        setAiInsightsAvailable(true);
+      } else {
+        setAiInsightsAvailable(false);
+        setAiAnalysisResults(null);
+      }
     } catch (error) {
       console.error("❌ Code review failed:", error);
 
-      // Fallback to mock data if backend is not ready
-      console.warn("⚠️ Using mock data as fallback");
-      const workflow = workflows.find((wf) => wf.id === selectedWorkflow);
-      const mockResults = generateCodeReviewResults(workflow);
-      setReviewResults(mockResults);
+      alert(`Code Review failed: ${error.message || "Unknown error"}`);
+      setReviewResults(null);
     } finally {
       setReviewing(false);
     }
-  };
-
-  // Mock data generator (fallback)
-  const generateCodeReviewResults = (workflow) => {
-    const activityCount = workflow.activities || 50;
-    const criticalIssues = Math.floor(activityCount * 0.04);
-    const majorIssues = Math.floor(activityCount * 0.12);
-    const minorIssues = Math.floor(activityCount * 0.32);
-    const totalIssues = criticalIssues + majorIssues + minorIssues;
-
-    const qualityScore = Math.max(
-      0,
-      100 - (criticalIssues * 15 + majorIssues * 5 + minorIssues * 2),
-    );
-    const qualityGrade =
-      qualityScore >= 90
-        ? "A"
-        : qualityScore >= 80
-          ? "B"
-          : qualityScore >= 70
-            ? "C"
-            : qualityScore >= 60
-              ? "D"
-              : "F";
-
-    return {
-      workflowName: workflow.name,
-      reviewedAt: new Date().toISOString(),
-      qualityGrade,
-      qualityScore: qualityScore.toFixed(1),
-      critical: criticalIssues,
-      major: majorIssues,
-      minor: minorIssues,
-      info: Math.floor(activityCount * 0.15),
-      totalIssues,
-      categories: [
-        {
-          name: "Naming Conventions",
-          icon: "🏷️",
-          issues: Math.floor(activityCount * 0.08),
-          score: 85,
-        },
-        {
-          name: "Error Handling",
-          icon: "🛡️",
-          issues: criticalIssues,
-          score: criticalIssues === 0 ? 100 : 45,
-        },
-        {
-          name: "Performance",
-          icon: "⚡",
-          issues: Math.floor(activityCount * 0.05),
-          score: 92,
-        },
-        {
-          name: "Security",
-          icon: "🔒",
-          issues: Math.floor(activityCount * 0.03),
-          score: 88,
-        },
-        { name: "Maintainability", icon: "🔧", issues: majorIssues, score: 73 },
-        { name: "Code Standards", icon: "📋", issues: minorIssues, score: 67 },
-      ],
-      ruleBasedIssues: [
-        {
-          id: "UP-REL-001",
-          title: "Missing Try-Catch Exception Handling",
-          category: "Reliability",
-          severity: "Critical",
-          effort: "Low",
-          activity: "Main Sequence",
-          issue: "Workflow lacks proper exception handling",
-          description:
-            "All workflows should be wrapped in Try-Catch blocks with proper exception handling to prevent unexpected crashes and ensure graceful error recovery.",
-          recommendation:
-            "Wrap the main workflow sequence in a Try-Catch activity. In the Catch block, log the exception details and implement appropriate recovery logic or user notification.",
-          impact:
-            "High: Unhandled exceptions will cause the entire workflow to crash, potentially losing data and requiring manual intervention.",
-        },
-        {
-          id: "UP-REL-002",
-          title: "Business and System Exceptions Not Separated",
-          category: "Reliability",
-          severity: "High",
-          effort: "Medium",
-          activity: "Exception Handler",
-          issue: "No distinction between business and system exceptions",
-          description:
-            'Business exceptions (expected errors like "Record Not Found") should be handled differently from system exceptions (unexpected errors like "Database Connection Failed").',
-          recommendation:
-            "Implement separate Catch blocks for BusinessRuleException and SystemException. Route business exceptions to a different handler than system exceptions.",
-          impact:
-            "Medium: Difficult to debug and may lead to incorrect error handling strategies.",
-        },
-        {
-          id: "UP-PERF-003",
-          title: "Inefficient Loop Structure",
-          category: "Performance",
-          severity: "Major",
-          effort: "Medium",
-          activity: "For Each Row Loop",
-          issue: "Nested loops without optimization",
-          description:
-            "Multiple nested For Each loops detected without proper indexing or data structure optimization, leading to O(n²) complexity.",
-          recommendation:
-            "Consider using Dictionary or HashSet for lookups instead of nested loops. If nested iteration is necessary, ensure inner collections are as small as possible.",
-          impact:
-            "High: Performance degradation with large datasets. A 1000-row dataset could result in 1,000,000 iterations.",
-        },
-        {
-          id: "UP-SEC-004",
-          title: "Hardcoded Credentials Detected",
-          category: "Security",
-          severity: "Critical",
-          effort: "Low",
-          activity: "Assign Activity",
-          issue: "Password stored in plain text",
-          description:
-            "Credentials are hardcoded directly in the workflow instead of using Orchestrator Assets or Windows Credential Manager.",
-          recommendation:
-            "Move all credentials to Orchestrator Assets (for cloud) or Windows Credential Manager (for on-premise). Use Get Credential activity to retrieve them securely.",
-          impact:
-            "Critical: Security breach risk. Anyone with access to the workflow file can see the credentials.",
-        },
-        {
-          id: "UP-MAINT-005",
-          title: "Inconsistent Variable Naming",
-          category: "Maintainability",
-          severity: "Minor",
-          effort: "Low",
-          activity: "Multiple Variables",
-          issue: "Variables use mixed naming conventions",
-          description:
-            "Variables use inconsistent naming patterns (camelCase, PascalCase, snake_case) making the code harder to read and maintain.",
-          recommendation:
-            'Adopt PascalCase for all variables as per UiPath best practices. Example: "str_userName" should be "UserName", "dt_data" should be "DataTable".',
-          impact:
-            "Low: Reduced code readability and increased maintenance effort for team members.",
-        },
-      ],
-    };
   };
 
   const handleRunAIAnalysis = async () => {
@@ -860,17 +750,37 @@ const CodeReviewTool = () => {
       ) : (
         <Container maxWidth="lg">
           <Header>
-            <BackButton
-              startIcon={<ArrowBackIcon />}
-              onClick={() => navigate("/dashboard")}
+            <Box>
+              <BackButton
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate("/dashboard")}
+              >
+                Dashboard
+              </BackButton>
+              <Title>Code Review Tool</Title>
+              <Subtitle>
+                Validate workflows against best practices and coding standards
+                with AI-powered insights
+              </Subtitle>
+            </Box>
+            <Button
+              variant="outlined"
+              startIcon={<SettingsIcon />}
+              onClick={() => navigate("/custom-rules")}
+              sx={{
+                color: "#9d4edd",
+                borderColor: "#9d4edd",
+                textTransform: "none",
+                fontWeight: 600,
+                borderRadius: "8px",
+                "&:hover": {
+                  borderColor: "#8939c9",
+                  background: "rgba(157, 78, 221, 0.08)",
+                },
+              }}
             >
-              Dashboard
-            </BackButton>
-            <Title>Code Review Tool</Title>
-            <Subtitle>
-              Validate workflows against best practices and coding standards
-              with AI-powered insights
-            </Subtitle>
+              Custom Rules
+            </Button>
           </Header>
 
           <ConfigCard>

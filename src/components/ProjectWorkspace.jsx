@@ -14,6 +14,8 @@ import {
   Snackbar,
   Alert,
   FormControl,
+  FormControlLabel,
+  Checkbox,
   LinearProgress,
   Table,
   TableBody,
@@ -209,6 +211,7 @@ const ProjectWorkspace = () => {
   const [showResults, setShowResults] = useState(false);
   const [analysisData, setAnalysisData] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [enableAiAnalysis, setEnableAiAnalysis] = useState(false);
 
   // NAVIGATION HANDLERS
   const handleViewDetail = (process, index) => {
@@ -448,6 +451,7 @@ const ProjectWorkspace = () => {
       // Upload all files to backend
       const uploadResults = await api.analysis.uploadMultiple(uploadedFiles, {
         projectId: currentProject?.project_id,
+        enableAiAnalysis: enableAiAnalysis,
       });
 
       console.log("✅ Upload results:", uploadResults);
@@ -472,9 +476,15 @@ const ProjectWorkspace = () => {
 
           // Metadata fields from backend
           nestingDepth: result.nestingDepth || 0,
-          variables: result.variableCount ?? (Array.isArray(result.variables) ? result.variables.length : 0),
+          variables:
+            result.variableCount ??
+            (Array.isArray(result.variables) ? result.variables.length : 0),
           argumentCount: result.argumentCount || 0,
-          invokedWorkflows: result.invokedWorkflowCount ?? (Array.isArray(result.invokedWorkflows) ? result.invokedWorkflows.length : 0),
+          invokedWorkflows:
+            result.invokedWorkflowCount ??
+            (Array.isArray(result.invokedWorkflows)
+              ? result.invokedWorkflows.length
+              : 0),
           exceptionHandlers: result.exceptionHandlers || 0,
           customCode: result.hasCustomCode || false,
           compatibilityScore: result.compatibilityScore || 0,
@@ -710,8 +720,22 @@ const ProjectWorkspace = () => {
               r.analysis?.activity_breakdown || { Other: activities };
 
             // Resolve variable count (backend sends both variableCount and variables array)
-            const variableCount = r.variableCount ?? r.variable_count ?? (Array.isArray(r.variables) ? r.variables.length : (typeof r.variables === 'number' ? r.variables : 0));
-            const invokedWorkflowCount = r.invokedWorkflowCount ?? r.invoked_workflow_count ?? (Array.isArray(r.invokedWorkflows) ? r.invokedWorkflows.length : (typeof r.invokedWorkflows === 'number' ? r.invokedWorkflows : 0));
+            const variableCount =
+              r.variableCount ??
+              r.variable_count ??
+              (Array.isArray(r.variables)
+                ? r.variables.length
+                : typeof r.variables === "number"
+                  ? r.variables
+                  : 0);
+            const invokedWorkflowCount =
+              r.invokedWorkflowCount ??
+              r.invoked_workflow_count ??
+              (Array.isArray(r.invokedWorkflows)
+                ? r.invokedWorkflows.length
+                : typeof r.invokedWorkflows === "number"
+                  ? r.invokedWorkflows
+                  : 0);
 
             const processData = {
               name:
@@ -733,9 +757,11 @@ const ProjectWorkspace = () => {
               variables: variableCount,
               argumentCount: r.argumentCount || r.argument_count || 0,
               invokedWorkflows: invokedWorkflowCount,
-              exceptionHandlers: r.exceptionHandlers || r.exception_handlers || 0,
+              exceptionHandlers:
+                r.exceptionHandlers || r.exception_handlers || 0,
               customCode: r.hasCustomCode || r.has_custom_code || false,
-              compatibilityScore: r.compatibilityScore || r.compatibility_score || 0,
+              compatibilityScore:
+                r.compatibilityScore || r.compatibility_score || 0,
 
               risks: Array.isArray(risks) ? risks : [risks],
               workflow_id: r.workflow_id || r.id,
@@ -815,7 +841,54 @@ const ProjectWorkspace = () => {
     }
   };
 
-  const handleOnWorkflowDelete = async () => {
+  const handleOnWorkflowDelete = async (deletedWorkflowId) => {
+    // Immediately remove the deleted workflow from local state
+    if (deletedWorkflowId && analysisData) {
+      const updatedProcesses = analysisData.processes.filter(
+        (p) => p.workflow_id !== deletedWorkflowId,
+      );
+
+      const totalActivities = updatedProcesses.reduce(
+        (sum, p) => sum + Number(p.activities),
+        0,
+      );
+      const avgComplexity =
+        updatedProcesses.length > 0
+          ? updatedProcesses.reduce((sum, p) => sum + Number(p.complexity), 0) /
+            updatedProcesses.length
+          : 0;
+      const highRiskProcesses = updatedProcesses.filter((p) => {
+        const lvl = (p.level || "").toString().trim().toLowerCase();
+        return ["very high", "critical", "high"].includes(lvl);
+      }).length;
+
+      const updatedData = {
+        ...analysisData,
+        totalProcesses: updatedProcesses.length,
+        avgComplexity: Math.round(avgComplexity * 10) / 10,
+        totalActivities,
+        highRiskProcesses,
+        processes: updatedProcesses,
+      };
+
+      setAnalysisData(updatedProcesses.length > 0 ? updatedData : null);
+
+      // Update localStorage cache immediately so stale data doesn't reappear
+      if (currentProject?.project_id) {
+        const localStorageKey = `project_${currentProject.project_id}_analysis`;
+        if (updatedProcesses.length > 0) {
+          localStorage.setItem(localStorageKey, JSON.stringify(updatedData));
+        } else {
+          localStorage.removeItem(localStorageKey);
+        }
+      }
+
+      console.log(
+        `🗑️ Removed workflow ${deletedWorkflowId} from local state. Remaining: ${updatedProcesses.length}`,
+      );
+    }
+
+    // Then re-fetch from backend to stay in sync
     await loadProjectAnalysis();
   };
 
@@ -1200,13 +1273,6 @@ const ProjectWorkspace = () => {
           >
             Code Review
           </ActionButton>
-          <ActionButton
-            startIcon={<SettingsIcon />}
-            bgcolor="#ff9800"
-            onClick={() => handleActionClick("Custom Rules")}
-          >
-            Custom Rules
-          </ActionButton>
           <OutlinedActionButton
             startIcon={<RefreshIcon />}
             onClick={() => handleActionClick("Refresh")}
@@ -1420,6 +1486,33 @@ const ProjectWorkspace = () => {
                 />
               </Box>
             )}
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={enableAiAnalysis}
+                  onChange={(e) => setEnableAiAnalysis(e.target.checked)}
+                  sx={{
+                    color: "#9d4edd",
+                    "&.Mui-checked": {
+                      color: "#9d4edd",
+                    },
+                  }}
+                />
+              }
+              label={
+                <Typography
+                  sx={{
+                    fontWeight: 500,
+                    fontSize: "14px",
+                    color: "#424242",
+                  }}
+                >
+                  Existing Updated File
+                </Typography>
+              }
+              sx={{ mb: 2 }}
+            />
 
             <Button
               fullWidth

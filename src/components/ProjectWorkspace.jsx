@@ -211,7 +211,7 @@ const ProjectWorkspace = () => {
   const [showResults, setShowResults] = useState(false);
   const [analysisData, setAnalysisData] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [enableAiAnalysis, setEnableAiAnalysis] = useState(false);
+  const [enableAiAnalysis, setEnableAiAnalysis] = useState(true);
 
   // NAVIGATION HANDLERS
   const handleViewDetail = (process, index) => {
@@ -1508,7 +1508,7 @@ const ProjectWorkspace = () => {
                     color: "#424242",
                   }}
                 >
-                  Existing Updated File
+                  New File?
                 </Typography>
               }
               sx={{ mb: 2 }}

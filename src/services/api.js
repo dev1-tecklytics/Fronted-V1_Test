@@ -2,11 +2,7 @@
  * API Service Layer
  * Handles all HTTP requests to the Python backend
  */
-
-// Base URL for the API - Update this to match your Python backend URL
-export const API_BASE_URL = "http://localhost:8080/api/v1";
-// import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api/v1";
-
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 console.log("🌐 API_BASE_URL:", API_BASE_URL);
 
 /**

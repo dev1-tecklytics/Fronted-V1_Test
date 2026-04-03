@@ -31,6 +31,7 @@ import {
 import { styled } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { projectAPI, analysisAPI } from "../services/api";
+import { tokenManager } from "../utils/tokenManager";
 
 const PageContainer = styled(Box)(({ theme }) => ({
   minHeight: "100vh",
@@ -216,7 +217,7 @@ const WorkflowAnalyzer = () => {
 
     /* Backend integration code (uncomment when endpoint is ready):
         try {
-            const apiKey = localStorage.getItem('apiKey');
+            const apiKey = tokenManager.getApiKey();
             const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/analysis/compare-platforms`, {
                 method: 'POST',
                 headers: {

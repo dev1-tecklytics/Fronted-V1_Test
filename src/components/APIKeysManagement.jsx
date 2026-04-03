@@ -36,6 +36,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
 import { apiKeyAPI } from '../services/api';
+import { tokenManager } from '../utils/tokenManager';
 
 const PageContainer = styled(Box)(({ theme }) => ({
     minHeight: '100vh',
@@ -149,7 +150,7 @@ const APIKeysManagement = () => {
             fetchAPIKeys();
 
             // Also save to localStorage for immediate use
-            localStorage.setItem('apiKey', response.api_key);
+            tokenManager.setApiKey(response.api_key);
 
             setSnackbar({
                 open: true,

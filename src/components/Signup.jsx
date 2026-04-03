@@ -24,7 +24,8 @@ import {
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
-import { API_BASE_URL } from "../services/api";
+import { authAPI, API_BASE_URL } from "../services/api";
+import { tokenManager } from "../utils/tokenManager";
 
 // Styled components with modern aesthetics
 const StyledCard = styled(Card)(({ theme }) => ({
@@ -240,13 +241,13 @@ const Signup = () => {
       // Store token and user data
       let apiKey = null;
       if (data.access_token) {
-        apiKey = data.api_key_prefix + " : " + data.api_key_hash;
-        localStorage.setItem("authToken", data.access_token);
-        localStorage.setItem("apiKey", apiKey);
-        console.log("🔑 Token stored");
+        apiKey = data.api_key_prefix ? `${data.api_key_prefix} : ${data.api_key_hash}` : data.api_key;
+        tokenManager.setAuthToken(data.access_token);
+        if (apiKey) tokenManager.setApiKey(apiKey);
       }
-      localStorage.setItem("currentUser", JSON.stringify(data.user || data));
-      console.log("👤 User data stored");
+      if (data.user || data) {
+        tokenManager.setCurrentUser(data.user || data);
+      }
 
       setSnackbarMessage(
         data.access_token 
@@ -258,28 +259,18 @@ const Signup = () => {
       // If we received an access token, we can check projects and redirect to dashboard/workspace
       if (data.access_token) {
         try {
-          const projectsResponse = await fetch(
-            `${API_BASE_URL}/projects`,
-            {
+          const projectsResponse = await fetch(`${API_BASE_URL}/projects`, {
               headers: {
-                Authorization: `Bearer ${data.access_token}`,
-                "X-API-Key": apiKey,
+                Authorization: `Bearer ${tokenManager.getAuthToken()}`,
+                "X-API-Key": tokenManager.getApiKey(),
               },
-            },
-          );
+            });
           const projects = await projectsResponse.json();
 
-          // Redirect based on project count
           setTimeout(() => {
             if (projects && projects.length > 0) {
-              console.log(
-                "🚀 Existing user with projects. Redirecting to workspace...",
-              );
-              localStorage.setItem("currentProject", JSON.stringify(projects[0]));
-              localStorage.setItem("activeProjectId", projects[0].project_id);
               navigate("/workspace");
             } else {
-              console.log("🚀 New user. Redirecting to dashboard...");
               navigate("/dashboard");
             }
           }, 2000);

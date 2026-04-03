@@ -33,6 +33,7 @@ import {
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { tokenManager } from '../utils/tokenManager';
 
 
 // Styled components
@@ -220,8 +221,8 @@ const Dashboard = () => {
     const [loadingProjects, setLoadingProjects] = useState(true);
 
 
-    // Get user from localStorage with proper field mapping
-    const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    // Get user from tokenManager
+    const storedUser = tokenManager.getCurrentUser() || {};
     const currentUser = {
         name: storedUser.full_name || storedUser.name || storedUser.email?.split('@')[0] || 'User',
         email: storedUser.email || '',
@@ -331,7 +332,7 @@ const Dashboard = () => {
         console.log('👋 User logging out');
 
         // Clear all session data. Data is persisted in PostgreSQL, so no need to preserve projects/workflows locally.
-        localStorage.clear();
+        tokenManager.clear();
 
         navigate('/');
     };

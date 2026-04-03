@@ -23,9 +23,9 @@ import {
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
-import { apiKeyAPI, API_BASE_URL } from "../services/api";
+import { authAPI, API_BASE_URL } from "../services/api";
+import { tokenManager } from "../utils/tokenManager";
 
-// Styled components with modern aesthetics
 const StyledCard = styled(Card)(({ theme }) => ({
   maxWidth: 460,
   width: "100%",
@@ -52,12 +52,8 @@ const StyledAvatar = styled(Avatar)(({ theme }) => ({
   boxShadow: "0 8px 24px rgba(94, 111, 242, 0.3)",
   animation: "pulse 2s ease-in-out infinite",
   "@keyframes pulse": {
-    "0%, 100%": {
-      transform: "scale(1)",
-    },
-    "50%": {
-      transform: "scale(1.05)",
-    },
+    "0%, 100%": { transform: "scale(1)" },
+    "50%": { transform: "scale(1.05)" },
   },
   [theme.breakpoints.down("sm")]: {
     width: 60,
@@ -70,15 +66,9 @@ const StyledTextField = styled(TextField)(({ theme }) => ({
     borderRadius: "12px",
     backgroundColor: "#fafafa",
     transition: "all 0.3s ease",
-    "& fieldset": {
-      borderColor: "transparent",
-    },
-    "&:hover": {
-      backgroundColor: "#f5f5f5",
-    },
-    "&:hover fieldset": {
-      borderColor: "#5e6ff2",
-    },
+    "& fieldset": { borderColor: "transparent" },
+    "&:hover": { backgroundColor: "#f5f5f5" },
+    "&:hover fieldset": { borderColor: "#5e6ff2" },
     "&.Mui-focused": {
       backgroundColor: "#ffffff",
       boxShadow: "0 0 0 3px rgba(94, 111, 242, 0.1)",
@@ -88,9 +78,7 @@ const StyledTextField = styled(TextField)(({ theme }) => ({
       borderWidth: "2px",
     },
   },
-  "& .MuiInputLabel-root": {
-    fontWeight: 500,
-  },
+  "& .MuiInputLabel-root": { fontWeight: 500 },
 }));
 
 const GradientButton = styled(Button)(({ theme }) => ({
@@ -108,9 +96,7 @@ const GradientButton = styled(Button)(({ theme }) => ({
     boxShadow: "0 12px 32px rgba(94, 111, 242, 0.45)",
     transform: "translateY(-2px)",
   },
-  "&:active": {
-    transform: "translateY(0)",
-  },
+  "&:active": { transform: "translateY(0)" },
   [theme.breakpoints.down("sm")]: {
     padding: "12px 24px",
     fontSize: "15px",
@@ -123,178 +109,64 @@ const Login = () => {
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
-  // Dummy user database
-  const dummyUsers = [
-    {
-      id: 1,
-      name: "John Doe",
-      email: "john@example.com",
-      password: "password123",
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      email: "jane@example.com",
-      password: "password456",
-    },
-    {
-      id: 3,
-      name: "Admin User",
-      email: "admin@iaap.com",
-      password: "admin123",
-    },
-  ];
+  const [formData, setFormData] = useState({ email: "", password: "" });
 
   const handleClickShowPassword = () => {
     setShowPassword(!showPassword);
   };
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    localStorage.clear();
+    tokenManager.clear();
 
-    // Validation
     if (!formData.email || !formData.password) {
-      setSnackbarMessage("❌ Please fill in all fields");
+      setSnackbarMessage("Please fill in all fields");
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
       return;
     }
 
     try {
-      const apiUrl = `${API_BASE_URL}/auth/login`;
-      console.log("🔐 Attempting login...");
-      console.log("📍 API URL:", apiUrl);
-      console.log("📧 Email:", formData.email);
-
-      // Call real backend API
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
+      const data = await authAPI.login({
+        email: formData.email,
+        password: formData.password,
       });
-      console.log("📡 Response:", response);
 
-      console.log("📡 Response status:", response.status);
-      console.log(
-        "📡 Response headers:",
-        Object.fromEntries(response.headers.entries()),
-      );
-
-      const data = await response.json();
-      console.log("📦 Response data:", data);
-
-      if (!response.ok) {
-        // Handle different error statuses
-        if (response.status === 404) {
-          throw new Error(
-            "Login endpoint not found. Please check backend configuration.",
-          );
-        } else if (response.status === 401) {
-          throw new Error("Invalid email or password");
-        } else if (response.status === 422) {
-          throw new Error(data.detail?.[0]?.msg || "Invalid input format");
-        } else {
-          throw new Error(
-            data.detail || data.message || `Error: ${response.status}`,
-          );
-        }
+      if (data.api_key) {
+        tokenManager.setApiKey(data.api_key);
+      } else if (data.api_key_prefix && data.api_key_hash) {
+        tokenManager.setApiKey(`${data.api_key_prefix} : ${data.api_key_hash}`);
       }
 
-      console.log("✅ Login successful:", data);
-
-      // Store token and user data from backend response
-      // Backend returns: { access_token, token_type, user: { email, full_name, user_id } }
-      let apiKey = null;
-      if (data.access_token) {
-        apiKey = data.api_key_prefix + " : " + data.api_key_hash;
-        localStorage.setItem("authToken", data.access_token);
-        localStorage.setItem("apiKey", apiKey);
-        console.log(
-          "🔑 Token stored:",
-          data.access_token.substring(0, 20) + "...",
-        );
-      }
-
-      if (data.user) {
-        // Store complete user object
-        localStorage.setItem("currentUser", JSON.stringify(data.user));
-        localStorage.setItem("userId", data.user.user_id);
-        localStorage.setItem("userEmail", data.user.email);
-        localStorage.setItem("userFullName", data.user.full_name);
-        console.log("👤 User data stored:", data.user);
-      }
-      // API Key management is now handled by the backend dual-auth system.
-      // No need to create a new key on every login anymore.
-
-      setSnackbarMessage(
-        `✅ Welcome back, ${data.user?.full_name || data.user?.email || "User"}!`,
-      );
+      setSnackbarMessage(`Welcome back, ${data.user?.full_name || data.user?.email || "User"}!`);
       setSnackbarSeverity("success");
       setOpenSnackbar(true);
 
-      // Fetch projects to determine where to redirect
       try {
-        const projectsResponse = await fetch(
-          `${API_BASE_URL}/projects`,
-          {
-            headers: {
-              Authorization: `Bearer ${data.access_token}`,
-              "X-API-Key": apiKey,
-            },
+        const projectsResponse = await fetch(`${API_BASE_URL}/projects`, {
+          headers: {
+            Authorization: `Bearer ${tokenManager.getAuthToken()}`,
+            "X-API-Key": tokenManager.getApiKey(),
           },
-        );
+        });
         const projects = await projectsResponse.json();
 
-        // Redirect based on project count
         setTimeout(() => {
           if (projects && projects.length > 0) {
-            console.log(
-              "🚀 Existing user with projects. Redirecting to workspace...",
-            );
-            // Set the first project as active if none is set
-            localStorage.setItem("currentProject", JSON.stringify(projects[0]));
-            localStorage.setItem("activeProjectId", projects[0].project_id);
             navigate("/workspace");
           } else {
-            console.log("🚀 New user. Redirecting to dashboard...");
             navigate("/dashboard");
           }
         }, 1500);
-      } catch (projectError) {
-        console.error("❌ Error fetching projects during login:", projectError);
-        // Fallback to dashboard if projects check fails
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 1500);
+      } catch {
+        setTimeout(() => navigate("/dashboard"), 1500);
       }
     } catch (error) {
-      console.error("❌ Login error:", error);
-      console.error("❌ Error details:", {
-        message: error.message,
-        stack: error.stack,
-      });
-
-      setSnackbarMessage(
-        `❌ ${error.message || "Login failed. Please try again."}`,
-      );
+      setSnackbarMessage(error.message || "Login failed. Please try again.");
       setSnackbarSeverity("error");
       setOpenSnackbar(true);
     }
@@ -312,14 +184,10 @@ const Login = () => {
     >
       <StyledCard>
         <CardContent sx={{ padding: 0 }}>
-          {/* Logo/Icon */}
           <StyledAvatar>
-            <ShieldIcon
-              sx={{ fontSize: { xs: 30, sm: 35 }, color: "#ffffff" }}
-            />
+            <ShieldIcon sx={{ fontSize: { xs: 30, sm: 35 }, color: "#ffffff" }} />
           </StyledAvatar>
 
-          {/* Title */}
           <Typography
             variant="h4"
             component="h1"
@@ -336,7 +204,6 @@ const Login = () => {
             Welcome to IAAP
           </Typography>
 
-          {/* Subtitle */}
           <Typography
             variant="body1"
             align="center"
@@ -350,10 +217,8 @@ const Login = () => {
             Intelligent Automation Analysis Platform
           </Typography>
 
-          {/* Login Form */}
           <form onSubmit={handleSubmit} autoComplete="off">
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
-              {/* Email Field */}
               <Box>
                 <Typography
                   variant="body2"
@@ -384,15 +249,10 @@ const Login = () => {
                 />
               </Box>
 
-              {/* Password Field */}
               <Box>
                 <Typography
                   variant="body2"
-                  sx={{
-                    fontWeight: 600,
-                    marginBottom: "8px",
-                    color: "#212121",
-                  }}
+                  sx={{ fontWeight: 600, marginBottom: "8px", color: "#212121" }}
                 >
                   Password
                 </Typography>
@@ -429,7 +289,6 @@ const Login = () => {
                 />
               </Box>
 
-              {/* Sign In Button */}
               <GradientButton
                 fullWidth
                 type="submit"
@@ -441,14 +300,10 @@ const Login = () => {
             </Box>
           </form>
 
-          {/* Sign Up Link */}
           <Typography
             variant="body2"
             align="center"
-            sx={{
-              marginTop: "24px",
-              color: "#757575",
-            }}
+            sx={{ marginTop: "24px", color: "#757575" }}
           >
             Don't have an account?{" "}
             <Link
@@ -459,11 +314,8 @@ const Login = () => {
               sx={{
                 color: "#5e6ff2",
                 fontWeight: 600,
-                transition: "color 0.2s ease",
                 cursor: "pointer",
-                "&:hover": {
-                  color: "#9d4edd",
-                },
+                "&:hover": { color: "#9d4edd" },
               }}
             >
               Sign up
@@ -472,7 +324,6 @@ const Login = () => {
         </CardContent>
       </StyledCard>
 
-      {/* Snackbar for notifications */}
       <Snackbar
         open={openSnackbar}
         autoHideDuration={3000}

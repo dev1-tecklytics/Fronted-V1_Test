@@ -75,6 +75,7 @@ import {
   projectAPI,
 } from "../services/api";
 import api from "../services/api";
+import { tokenManager } from "../utils/tokenManager";
 import AnalysisResults from "./AnalysisResults";
 
 // Styled components
@@ -227,8 +228,8 @@ const ProjectWorkspace = () => {
     });
   };
 
-  // Get user from localStorage with proper field mapping
-  const storedUser = JSON.parse(localStorage.getItem("currentUser") || "{}");
+  // Get user from tokenManager
+  const storedUser = tokenManager.getCurrentUser() || {};
   const currentUser = {
     name:
       storedUser.full_name ||
@@ -297,7 +298,7 @@ const ProjectWorkspace = () => {
 
   const handleLogout = () => {
     console.log("👋 User logging out");
-    localStorage.clear();
+    tokenManager.clear();
     navigate("/");
   };
 

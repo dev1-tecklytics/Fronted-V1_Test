@@ -42,13 +42,13 @@ const theme = createTheme({
   },
 });
 
+import { tokenManager } from './utils/tokenManager';
+
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
-
-  const isAuthenticated = !!localStorage.getItem('authToken');
+  const isAuthenticated = !!tokenManager.getAuthToken();
 
   if (!isAuthenticated) {
-    console.warn('🔒 Route protected. Redirecting to login.');
     return <Navigate to="/login" replace />;
   }
 

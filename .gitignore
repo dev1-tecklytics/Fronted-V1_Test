@@ -28,3 +28,14 @@ test_backend.html
 *.sql
 create_*.sql
 NEW_MAIN_PY.txt
+
+# Environment files — never commit secrets
+.env.local
+.env.*.local
+.env.production
+
+# Sensitive files
+*.pem
+*.key
+*.p12
+*.pfx

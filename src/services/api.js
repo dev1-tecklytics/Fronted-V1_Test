@@ -2,27 +2,49 @@
  * API Service Layer
  * Handles all HTTP requests to the Python backend
  */
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
-console.log("🌐 API_BASE_URL:", API_BASE_URL);
+import { tokenManager } from '../utils/tokenManager';
+
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
+// Block requests to AWS metadata and other internal services (SSRF prevention)
+const BLOCKED_HOSTS = ['169.254.169.254', '169.254.170.2', 'metadata.google.internal'];
+
+const validateUrl = (url) => {
+  try {
+    const parsed = new URL(url);
+    if (BLOCKED_HOSTS.includes(parsed.hostname)) {
+      throw new Error('Request to internal metadata service blocked');
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('Only HTTP/HTTPS protocols are allowed');
+    }
+  } catch (e) {
+    throw new Error(`Invalid request URL: ${e.message}`);
+  }
+};
+
+if (import.meta.env.DEV) {
+  console.log('🌐 API_BASE_URL:', API_BASE_URL);
+}
 
 /**
  * Generic API request handler with error handling
  */
 const apiRequest = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
+  validateUrl(url);
+
+  const token = tokenManager.getAuthToken();
+  const apiKey = tokenManager.getApiKey();
 
   const defaultHeaders = {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
+    'X-API-Key': apiKey,
   };
 
-  // Add authorization token if exists
-  const token = localStorage.getItem("authToken");
-  const apiKey = localStorage.getItem("apiKey");
-  // if (apiKey) {
-  defaultHeaders["X-API-Key"] = apiKey;
-  // }
   if (token) {
-    defaultHeaders["Authorization"] = `Bearer ${token}`;
+    defaultHeaders['Authorization'] = `Bearer ${token}`;
   }
 
   const config = {
@@ -36,11 +58,10 @@ const apiRequest = async (endpoint, options = {}) => {
   try {
     const response = await fetch(url, config);
 
-    // Handle different response types
-    const contentType = response.headers.get("content-type");
+    const contentType = response.headers.get('content-type');
     let data;
 
-    if (contentType && contentType.includes("application/json")) {
+    if (contentType && contentType.includes('application/json')) {
       data = await response.json();
     } else {
       data = await response.text();
@@ -49,14 +70,16 @@ const apiRequest = async (endpoint, options = {}) => {
     if (!response.ok) {
       throw {
         status: response.status,
-        message: data.message || data.detail || "An error occurred",
+        message: data.message || data.detail || 'An error occurred',
         data: data,
       };
     }
 
     return data;
   } catch (error) {
-    console.error("API Request Error:", error);
+    if (import.meta.env.DEV) {
+      console.error('API Request Error:', error);
+    }
     throw error;
   }
 };
@@ -64,40 +87,31 @@ const apiRequest = async (endpoint, options = {}) => {
 // ==================== Authentication APIs ====================
 
 export const authAPI = {
-  /**
-   * Login user
-   * @param {Object} credentials - { email, password }
-   * @returns {Promise} { access_token, token_type, user: { email, full_name, user_id } }
-   */
   login: async (credentials) => {
-    const response = await apiRequest("/auth/login", {
-      method: "POST",
+    const response = await apiRequest('/auth/login', {
+      method: 'POST',
       body: JSON.stringify(credentials),
     });
 
-    // Store token and user data
     if (response.access_token) {
-      const apiKey = data.api_key_prefix + " : " + data.api_key_hash;
-      localStorage.setItem("authToken", response.access_token);
-      localStorage.setItem("apiKey", apiKey);
-      localStorage.setItem("currentUser", JSON.stringify(response.user));
+      tokenManager.setAuthToken(response.access_token);
+      if (response.api_key) {
+        tokenManager.setApiKey(response.api_key);
+      }
+      if (response.user) {
+        tokenManager.setCurrentUser(response.user);
+      }
     }
 
     return response;
   },
 
-  /**
-   * Register new user
-   * @param {Object} userData - { full_name, email, password, company_name? }
-   * @returns {Promise} User object with trial subscription
-   */
   register: async (userData) => {
-    const response = await apiRequest("/auth/register", {
-      method: "POST",
+    const response = await apiRequest('/auth/register', {
+      method: 'POST',
       body: JSON.stringify(userData),
     });
 
-    // Auto-login after registration
     if (response.email) {
       const loginResponse = await authAPI.login({
         email: userData.email,
@@ -109,256 +123,89 @@ export const authAPI = {
     return response;
   },
 
-  /**
-   * Logout user
-   */
   logout: async () => {
     try {
-      await apiRequest("/auth/logout", {
-        method: "POST",
-      });
+      await apiRequest('/auth/logout', { method: 'POST' });
     } finally {
-      // Always clear local storage
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("currentUser");
+      tokenManager.clear();
     }
   },
 
-  /**
-   * Refresh access token
-   */
   refreshToken: async () => {
-    const response = await apiRequest("/auth/refresh-token", {
-      method: "POST",
-    });
+    const response = await apiRequest('/auth/refresh-token', { method: 'POST' });
 
     if (response.access_token) {
-      const apiKey = data.api_key_prefix + " : " + data.api_key_hash;
-      localStorage.setItem("apiKey", apiKey);
-      localStorage.setItem("authToken", response.access_token);
+      tokenManager.setAuthToken(response.access_token);
+      if (response.api_key) {
+        tokenManager.setApiKey(response.api_key);
+      }
     }
 
     return response;
   },
 
-  /**
-   * Get current user from localStorage
-   */
-  getCurrentUser: () => {
-    const userStr = localStorage.getItem("currentUser");
-    return userStr ? JSON.parse(userStr) : null;
-  },
+  getCurrentUser: () => tokenManager.getCurrentUser(),
 };
 
 // ==================== Project APIs ====================
 
 export const projectAPI = {
-  /**
-   * Get all projects for current user
-   */
-  getAll: async () => {
-    return apiRequest("/projects", {
-      method: "GET",
-    });
-  },
-
-  /**
-   * Get single project by ID
-   * @param {string|number} projectId
-   */
-  getById: async (projectId) => {
-    return apiRequest(`/projects/${projectId}`, {
-      method: "GET",
-    });
-  },
-
-  /**
-   * Create new project
-   * @param {Object} projectData - { name, description, platform }
-   */
-  create: async (projectData) => {
-    return apiRequest("/projects", {
-      method: "POST",
-      body: JSON.stringify(projectData),
-    });
-  },
-
-  /**
-   * Update existing project
-   * @param {string|number} projectId
-   * @param {Object} projectData
-   */
-  update: async (projectId, projectData) => {
-    return apiRequest(`/projects/${projectId}`, {
-      method: "PUT",
-      body: JSON.stringify(projectData),
-    });
-  },
-
-  /**
-   * Delete project
-   * @param {string|number} projectId
-   */
-  delete: async (projectId) => {
-    return apiRequest(`/projects/${projectId}`, {
-      method: "DELETE",
-    });
-  },
+  getAll: () => apiRequest('/projects'),
+  getById: (projectId) => apiRequest(`/projects/${projectId}`),
+  create: (projectData) => apiRequest('/projects', { method: 'POST', body: JSON.stringify(projectData) }),
+  update: (projectId, projectData) => apiRequest(`/projects/${projectId}`, { method: 'PUT', body: JSON.stringify(projectData) }),
+  delete: (projectId) => apiRequest(`/projects/${projectId}`, { method: 'DELETE' }),
 };
 
 // ==================== Workflow APIs ====================
 
 export const workflowAPI = {
-  /**
-   * Upload workflow file
-   * @param {string|number} projectId
-   * @param {File} file
-   */
-  upload: async (projectId, file) => {
+  upload: (projectId, file) => {
     const formData = new FormData();
-    formData.append("file", file);
-    formData.append("projectId", projectId);
-
-    return apiRequest("/workflows/upload", {
-      method: "POST",
-      headers: {}, // Let browser set Content-Type for FormData
-      body: formData,
-    });
+    formData.append('file', file);
+    formData.append('projectId', projectId);
+    return apiRequest('/workflows/upload', { method: 'POST', headers: {}, body: formData });
   },
-
-  /**
-   * Get all workflows for a project
-   * @param {string|number} projectId
-   */
-  getByProject: async (projectId) => {
-    return apiRequest(`/workflows?projectId=${projectId}`, {
-      method: "GET",
-    });
-  },
-
-  /**
-   * Analyze workflow
-   * @param {string|number} workflowId
-   * @param {Object} options - { sourcePlatform, targetPlatform }
-   */
-  analyze: async (workflowId, options) => {
-    return apiRequest(`/workflows/${workflowId}/analyze`, {
-      method: "POST",
-      body: JSON.stringify(options),
-    });
-  },
-
-  /**
-   * Convert workflow
-   * @param {string|number} workflowId
-   * @param {Object} options - { targetPlatform }
-   */
-  convert: async (workflowId, options) => {
-    return apiRequest(`/workflows/${workflowId}/convert`, {
-      method: "POST",
-      body: JSON.stringify(options),
-    });
-  },
-
-  /**
-   * Run code review on workflow
-   * @param {string|number} workflowId
-   * @param {Object} options - { platform, rules }
-   */
-  codeReview: async (workflowId, options) => {
-    return apiRequest(`/workflows/${workflowId}/code-review`, {
-      method: "POST",
-      body: JSON.stringify(options),
-    });
-  },
+  getByProject: (projectId) => apiRequest(`/workflows?projectId=${projectId}`),
+  analyze: (workflowId, options) => apiRequest(`/workflows/${workflowId}/analyze`, { method: 'POST', body: JSON.stringify(options) }),
+  convert: (workflowId, options) => apiRequest(`/workflows/${workflowId}/convert`, { method: 'POST', body: JSON.stringify(options) }),
+  codeReview: (workflowId, options) => apiRequest(`/workflows/${workflowId}/code-review`, { method: 'POST', body: JSON.stringify(options) }),
 };
 
 // ==================== Custom Rules APIs ====================
 
 export const rulesAPI = {
-  /**
-   * Get all custom rules with optional filtering
-   */
-  getAll: async (params = {}) => {
+  getAll: (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        query.append(key, value);
-      }
+      if (value !== undefined && value !== null && value !== '') query.append(key, value);
     });
     return apiRequest(`/custom-rules?${query.toString()}`);
   },
 
-  /**
-   * Create new custom rule
-   */
-  create: (ruleData) =>
-    apiRequest("/custom-rules", {
-      method: "POST",
-      body: JSON.stringify(ruleData),
-    }),
+  create: (ruleData) => apiRequest('/custom-rules', { method: 'POST', body: JSON.stringify(ruleData) }),
+  update: (ruleId, ruleData) => apiRequest(`/custom-rules/${ruleId}`, { method: 'PATCH', body: JSON.stringify(ruleData) }),
+  delete: (ruleId) => apiRequest(`/custom-rules/${ruleId}`, { method: 'DELETE' }),
+  bulkUpdate: (bulkData) => apiRequest('/custom-rules/bulk', { method: 'PATCH', body: JSON.stringify(bulkData) }),
 
-  /**
-   * Update custom rule
-   */
-  update: (ruleId, ruleData) =>
-    apiRequest(`/custom-rules/${ruleId}`, {
-      method: "PATCH",
-      body: JSON.stringify(ruleData),
-    }),
-
-  /**
-   * Delete custom rule
-   */
-  delete: (ruleId) =>
-    apiRequest(`/custom-rules/${ruleId}`, {
-      method: "DELETE",
-    }),
-
-  /**
-   * Bulk update rules
-   */
-  bulkUpdate: async (bulkData) => {
-    return apiRequest("/custom-rules/bulk", {
-      method: "PATCH",
-      body: JSON.stringify(bulkData),
-    });
-  },
-
-  /**
-   * Export rules
-   */
   export: async (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        query.append(key, value);
-      }
+      if (value !== undefined && value !== null && value !== '') query.append(key, value);
     });
-    const apiKey = localStorage.getItem("apiKey");
-    const response = await fetch(
-      `${API_BASE_URL}/custom-rules/export/${query.toString()}`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("authToken")}`,
-          "X-API-Key": apiKey,
-        },
+    const url = `${API_BASE_URL}/custom-rules/export?${query.toString()}`;
+    validateUrl(url);
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${tokenManager.getAuthToken()}`,
+        'X-API-Key': tokenManager.getApiKey(),
       },
-    );
-
-    if (!response.ok) throw new Error("Export failed");
-    return await response.blob();
-  },
-
-  /**
-   * Import rules
-   */
-  import: async (importData) => {
-    return apiRequest("/custom-rules/import", {
-      method: "POST",
-      body: JSON.stringify(importData),
     });
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
   },
+
+  import: (importData) => apiRequest('/custom-rules/import', { method: 'POST', body: JSON.stringify(importData) }),
 };
 
 export const customRulesAPI = rulesAPI;
@@ -366,582 +213,174 @@ export const customRulesAPI = rulesAPI;
 // ==================== Export APIs ====================
 
 export const exportAPI = {
-  /**
-   * Export projects to CSV
-   */
   exportProjectsCSV: async () => {
-    const response = await fetch(`${API_BASE_URL}/export/projects/csv`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("authToken")}`,
-      },
+    const url = `${API_BASE_URL}/export/projects/csv`;
+    validateUrl(url);
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${tokenManager.getAuthToken()}` },
     });
-
-    if (!response.ok) throw new Error("Export failed");
-
-    const blob = await response.blob();
-    return blob;
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
   },
 
-  /**
-   * Export projects to JSON
-   */
-  exportProjectsJSON: async () => {
-    return apiRequest("/export/projects/json", {
-      method: "GET",
-    });
-  },
+  exportProjectsJSON: () => apiRequest('/export/projects/json'),
 
-  /**
-   * Export rules to CSV
-   */
   exportRulesCSV: async () => {
-    const response = await fetch(`${API_BASE_URL}/export/rules/csv`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("authToken")}`,
-      },
+    const url = `${API_BASE_URL}/export/rules/csv`;
+    validateUrl(url);
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${tokenManager.getAuthToken()}` },
     });
-
-    if (!response.ok) throw new Error("Export failed");
-
-    const blob = await response.blob();
-    return blob;
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
   },
 
-  /**
-   * Export rules to JSON
-   */
-  exportRulesJSON: async () => {
-    return apiRequest("/export/rules/json", {
-      method: "GET",
-    });
-  },
+  exportRulesJSON: () => apiRequest('/export/rules/json'),
 };
 
 // ==================== Subscription APIs ====================
 
 export const subscriptionAPI = {
-  /**
-   * Get all available subscription plans
-   */
-  getPlans: async () => {
-    return apiRequest("/subscription/plans", {
-      method: "GET",
-    });
-  },
-
-  /**
-   * Get current user's subscription
-   */
-  getCurrent: async () => {
-    return apiRequest("/subscription/current", {
-      method: "GET",
-    });
-  },
-
-  /**
-   * Subscribe to a plan
-   * @param {string} planId - Plan ID to subscribe to
-   */
-  subscribe: async (planId) => {
-    return apiRequest(`/subscription/subscribe?plan_id=${planId}`, {
-      method: "POST",
-    });
-  },
-
-  /**
-   * Upgrade subscription
-   * @param {string} newPlanId - New plan ID
-   */
-  upgrade: async (newPlanId) => {
-    return apiRequest(`/subscription/upgrade?plan_id=${newPlanId}`, {
-      method: "PUT",
-    });
-  },
-
-  /**
-   * Cancel subscription
-   */
-  cancel: async () => {
-    return apiRequest("/subscription/cancel", {
-      method: "POST",
-    });
-  },
-
-  /**
-   * Get subscription usage statistics
-   */
-  getUsage: async () => {
-    return apiRequest("/subscription/usage", {
-      method: "GET",
-    });
-  },
+  getPlans: () => apiRequest('/subscription/plans'),
+  getCurrent: () => apiRequest('/subscription/current'),
+  subscribe: (planId) => apiRequest(`/subscription/subscribe?plan_id=${planId}`, { method: 'POST' }),
+  upgrade: (newPlanId) => apiRequest(`/subscription/upgrade?plan_id=${newPlanId}`, { method: 'PUT' }),
+  cancel: () => apiRequest('/subscription/cancel', { method: 'POST' }),
+  getUsage: () => apiRequest('/subscription/usage'),
 };
 
 // ==================== API Key Management ====================
 
 export const apiKeyAPI = {
-  /**
-   * Create a new API key
-   * @param {string} name - Optional name for the API key
-   */
-  create: async (name = "Default Key") => {
-    return apiRequest(`/api_key?name=${encodeURIComponent(name)}`, {
-      method: "POST",
-    });
-  },
-
-  /**
-   * List all API keys for current user
-   */
-  list: async () => {
-    return apiRequest("/api_key", {
-      method: "GET",
-    });
-  },
-
-  /**
-   * Delete an API key
-   * @param {string} apiKeyId
-   */
-  delete: async (apiKeyId) => {
-    return apiRequest(`/api_key/${apiKeyId}`, {
-      method: "DELETE",
-    });
-  },
+  create: (name = 'Default Key') => apiRequest(`/api_key?name=${encodeURIComponent(name)}`, { method: 'POST' }),
+  list: () => apiRequest('/api_key'),
+  delete: (apiKeyId) => apiRequest(`/api_key/${apiKeyId}`, { method: 'DELETE' }),
 };
 
 // ==================== Analysis APIs ====================
 
 export const analysisAPI = {
-  /**
-   * Upload and analyze UiPath workflow file
-   * @param {File} file - Workflow file to analyze
-   */
   uploadAndAnalyze: async (file, options = {}) => {
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append('file', file);
 
-    // NOTE: Backend currently uses /uipath for both UiPath and Blue Prism mock uploads
     let url = `${API_BASE_URL}/analyze/uipath`;
     const queryParams = [];
-    if (options?.projectId) {
-      queryParams.push(`project_id=${options.projectId}`);
-    }
-    if (options?.enableAiAnalysis !== undefined) {
-      queryParams.push(`enable_ai_analysis=${options.enableAiAnalysis}`);
-    }
-    if (queryParams.length > 0) {
-      url += `?${queryParams.join("&")}`;
-    }
+    if (options?.projectId) queryParams.push(`project_id=${options.projectId}`);
+    if (options?.enableAiAnalysis !== undefined) queryParams.push(`enable_ai_analysis=${options.enableAiAnalysis}`);
+    if (queryParams.length > 0) url += `?${queryParams.join('&')}`;
 
-    // PRIORITY: Use JWT (authToken) if available, fallback to apiKey
-    // This allows the "same API identity" to circulate via the user's login session
-    const authToken = localStorage.getItem("authToken");
-    const apiKey = localStorage.getItem("apiKey");
+    validateUrl(url);
+
+    const authToken = tokenManager.getAuthToken();
+    const apiKey = tokenManager.getApiKey();
     const authHeaderValue = authToken || apiKey;
 
     if (!authHeaderValue) {
-      console.error("❌ No Authentication found in localStorage");
-      throw new Error(
-        "Analysis requires a valid session or API Key. Please log in again.",
-      );
+      throw new Error('Analysis requires a valid session or API Key. Please log in again.');
     }
 
-    console.log("📤 Uploading file to analysis engine:", file.name);
-    console.log("📍 Target URL:", url);
-    console.log("🔑 Auth Method:", authToken ? "JWT Session" : "API Key");
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          // Use whichever token is available (Backend now supports both)
-          Authorization: `Bearer ${authHeaderValue}`,
-          "X-API-Key": apiKey,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { detail: errorText };
-        }
-
-        if (response.status === 401) {
-          throw new Error(
-            "Authentication failed (Invalid API Key). Please check your API key in settings.",
-          );
-        }
-        throw new Error(
-          errorData.detail ||
-            errorData.message ||
-            `Upload failed with status ${response.status}`,
-        );
-      }
-
-      const result = await response.json();
-      console.log("✅ Upload successful:", result);
-      
-      // The backend returns { "success": true, "analysis": { ... } }
-      // We need to unwrap the 'analysis' object for the frontend to use it
-      return result.analysis || result;
-    } catch (error) {
-      console.error("❌ Upload error:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get analysis status and results
-   * @param {string} analysisId - Analysis ID returned from upload
-   */
-  getAnalysisStatus: async (analysisId) => {
-    return apiRequest(`/analyze/${analysisId}`, {
-      method: "GET",
-    });
-  },
-
-  deleteWorkflow: async (workflowId) => {
-    return apiRequest(`/workflows/${workflowId}`, {
-      method: "DELETE",
-    });
-  },
-
-  updateWorkflowName: async (workflowId, workflowName) => {
-    return apiRequest(
-      `/workflows/name?workflow_id=${workflowId}&workflow_name=${workflowName}`,
-      {
-        method: "PATCH",
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authHeaderValue}`,
+        'X-API-Key': apiKey,
       },
-    );
-  },
-
-  getHistory: async (projectId) => {
-    const query = projectId ? `?project_id=${projectId}` : "";
-    const endpoint = `/analyze/history${query}`;
-    console.log(`📞 Calling API: GET ${endpoint}`);
-    return apiRequest(endpoint);
-  },
-
-  getWorkflowsForProject: async (projectId) => {
-    const query = projectId ? `?project_id=${projectId}` : "";
-    return apiRequest(`/workflows/project/${query}`);
-  },
-  /**
-   * Upload multiple files for batch analysis
-   * @param {File[]} files - Array of workflow files
-   */
-  uploadMultiple: async (files, options = {}) => {
-    const uploadPromises = files.map((file) =>
-      analysisAPI.uploadAndAnalyze(file, options),
-    );
-    return Promise.all(uploadPromises);
-  },
-
-  /**
-   * Get workflow details by ID
-   * @param {string} workflowId - Workflow ID from upload response
-   */
-  getWorkflow: async (workflowId) => {
-    return apiRequest(`/workflows/${workflowId}`, {
-      method: "GET",
+      body: formData,
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorData;
+      try { errorData = JSON.parse(errorText); } catch { errorData = { detail: errorText }; }
+      if (response.status === 401) throw new Error('Authentication failed. Please log in again.');
+      throw new Error(errorData.detail || errorData.message || `Upload failed with status ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.analysis || result;
   },
 
-  /**
-   * Get AI-generated suggestions for workflow
-   * @param {string} workflowId - Workflow ID
-   */
-  getSuggestions: async (workflowId) => {
-    return apiRequest(`/workflows/${workflowId}/suggestions`, {
-      method: "GET",
-    });
-  },
-
-  /**
-   * Get migration preview with activity mappings
-   * @param {string} workflowId - Workflow ID
-   */
-  getMigrationPreview: async (workflowId) => {
-    return apiRequest(`/workflows/${workflowId}/migration-preview`, {
-      method: "GET",
-    });
-  },
-
-  /**
-   * Get AI-generated migration strategy
-   * @param {string} workflowId - Workflow ID
-   */
-  getMigrationStrategy: async (workflowId) => {
-    return apiRequest(`/workflows/${workflowId}/migration-strategy`, {
-      method: "POST",
-    });
-  },
-  /**
-   * Get AI-generated migration strategy
-   * @param {string} workflowId - Workflow ID
-   */
-  getMigrationStrategy: async (workflowId) => {
-    return apiRequest(`/workflows/${workflowId}/migration-strategy`, {
-      method: "POST",
-    });
-  },
+  getAnalysisStatus: (analysisId) => apiRequest(`/analyze/${analysisId}`),
+  deleteWorkflow: (workflowId) => apiRequest(`/workflows/${workflowId}`, { method: 'DELETE' }),
+  updateWorkflowName: (workflowId, workflowName) => apiRequest(`/workflows/name?workflow_id=${workflowId}&workflow_name=${workflowName}`, { method: 'PATCH' }),
+  getHistory: (projectId) => apiRequest(`/analyze/history${projectId ? `?project_id=${projectId}` : ''}`),
+  getWorkflowsForProject: (projectId) => apiRequest(`/workflows/project/${projectId ? `?project_id=${projectId}` : ''}`),
+  uploadMultiple: (files, options = {}) => Promise.all(files.map((file) => analysisAPI.uploadAndAnalyze(file, options))),
+  getWorkflow: (workflowId) => apiRequest(`/workflows/${workflowId}`),
+  getSuggestions: (workflowId) => apiRequest(`/workflows/${workflowId}/suggestions`),
+  getMigrationPreview: (workflowId) => apiRequest(`/workflows/${workflowId}/migration-preview`),
+  getMigrationStrategy: (workflowId) => apiRequest(`/workflows/${workflowId}/migration-strategy`, { method: 'POST' }),
 };
 
 // ==================== Code Review APIs ====================
 
 export const codeReviewAPI = {
-  /**
-   * Get existing code review for a workflow (intelligent caching)
-   * @param {string} workflowId - Workflow ID to check
-   * @returns {Promise} Cached review results or null
-   */
   getExistingReview: async (workflowId) => {
-    const authToken = localStorage.getItem("authToken");
-    const apiKey = localStorage.getItem("apiKey");
-    const authHeaderValue = authToken || apiKey;
-
-    if (!authHeaderValue) {
-      console.error("❌ No Authentication found in localStorage");
-      throw new Error(
-        "Analysis requires a valid session or API Key. Please log in again.",
-      );
-    }
-
-    // Validate UUID format
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(workflowId)) {
-      console.error(
-        "❌ Invalid workflow ID format. Expected UUID, got:",
-        workflowId,
-      );
-      throw new Error(
-        "Invalid workflow ID format. Please select a valid workflow.",
-      );
+      throw new Error('Invalid workflow ID format. Please select a valid workflow.');
     }
-
     try {
-      const response = await apiRequest(
-        `/code-review?workflow_id=${encodeURIComponent(workflowId)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${authHeaderValue}`,
-            "X-API-Key": apiKey,
-          },
-        },
-      );
-
-      // Backend returns { message, review, aiAnalysis, summary } - return entire response
-      return response;
+      return await apiRequest(`/code-review?workflow_id=${encodeURIComponent(workflowId)}`);
     } catch (error) {
-      // Return null if no cached review found (404)
-      if (error.status === 404) {
-        return null;
-      }
+      if (error.status === 404) return null;
       throw error;
     }
   },
 
-  /**
-   * Run new code review analysis
-   * Backend: POST /api/v1/code-review with JSON body { workflowId, platform }
-   * @param {Object} reviewData - { workflowId, platform }
-   * @returns {Promise} Code review results
-   */
-  runReview: async (reviewData) => {
-    const authToken = localStorage.getItem("authToken");
-    const apiKey = localStorage.getItem("apiKey");
-    const authHeaderValue = authToken || apiKey;
+  runReview: (reviewData) => apiRequest('/code-review', {
+    method: 'POST',
+    body: JSON.stringify({
+      workflowId: reviewData.workflowId || reviewData.workflow_id,
+      platform: reviewData.platform,
+    }),
+  }),
 
-    if (!authHeaderValue) {
-      console.error("❌ No Authentication found in localStorage");
-      throw new Error(
-        "Analysis requires a valid session or API Key. Please log in again.",
-      );
-    }
-
-    console.log("📤 Sending code review request:", reviewData);
-
-    // Backend expects JSON body with workflowId and platform
-    const response = await apiRequest("/code-review", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${authHeaderValue}`,
-        "X-API-Key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        workflowId: reviewData.workflowId || reviewData.workflow_id,
-        platform: reviewData.platform,
-      }),
-    });
-
-    console.log("✅ Code review response:", response);
-
-    // Backend returns { message, review, aiAnalysis, summary } - return entire response
-    return response;
-  },
-
-  /**
-   * Run AI-powered analysis on a code review
-   * Backend: POST /api/v1/code-review/{review_id}/ai-analysis
-   * @param {string} reviewId - Review ID (not workflow ID!)
-   * @returns {Promise} AI analysis results with insights
-   */
   runAIAnalysis: async (reviewId) => {
-    const authToken = localStorage.getItem("authToken");
-    const apiKey = localStorage.getItem("apiKey");
-    const authHeaderValue = authToken || apiKey;
-
-    if (!authHeaderValue) {
-      console.error("❌ No Authentication found in localStorage");
-      throw new Error(
-        "AI Analysis requires a valid session or API Key. Please log in again.",
-      );
-    }
-
-    console.log("🤖 Running AI analysis for review:", reviewId);
-
-    // Backend expects review ID in path (not workflow ID!)
-    const response = await apiRequest(
-      `/code-review/${encodeURIComponent(reviewId)}/ai-analysis`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${authHeaderValue}`,
-          "X-API-Key": apiKey,
-        },
-      },
-    );
-
-    console.log("✅ AI analysis response:", response);
-
-    // Backend returns { message, analysis, summary } - extract analysis
+    const response = await apiRequest(`/code-review/${encodeURIComponent(reviewId)}/ai-analysis`, { method: 'POST' });
     return response?.analysis || response;
   },
 
-  /**
-   * Get AI analysis by review ID (for caching)
-   * Backend: GET /api/v1/code-review/ai-analysis?review_id={id}
-   * @param {string} reviewId - Review ID
-   * @returns {Promise} AI analysis results or null
-   */
   getAIAnalysis: async (reviewId) => {
-    const authToken = localStorage.getItem("authToken");
-    const apiKey = localStorage.getItem("apiKey");
-    const authHeaderValue = authToken || apiKey;
-
-    if (!authHeaderValue) {
-      console.error("❌ No Authentication found in localStorage");
-      throw new Error(
-        "AI Analysis requires a valid session or API Key. Please log in again.",
-      );
-    }
-
     try {
-      const response = await apiRequest(
-        `/code-review/ai-analysis?review_id=${encodeURIComponent(reviewId)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${authHeaderValue}`,
-            "X-API-Key": apiKey,
-          },
-        },
-      );
-
-      // Backend returns { message, analysis } - extract analysis
+      const response = await apiRequest(`/code-review/ai-analysis?review_id=${encodeURIComponent(reviewId)}`);
       return response?.analysis || response;
     } catch (error) {
-      // Return null if no AI analysis found (404) or endpoint not implemented (422)
-      if (error.status === 404 || error.status === 422) {
-        console.log(
-          "ℹ️ No cached AI analysis available (or endpoint not implemented)",
-        );
-        return null;
-      }
+      if (error.status === 404 || error.status === 422) return null;
       throw error;
     }
   },
 
-  /**
-   * Get all code reviews for current user
-   * @returns {Promise} Array of code review results
-   */
-  getAllReviews: async () => {
-    return apiRequest("/code-review/history", {
-      method: "GET",
-    });
-  },
+  getAllReviews: () => apiRequest('/code-review/history'),
 
-  /**
-   * Export code review to CSV
-   * @param {string} reviewId - Review ID
-   * @returns {Promise<Blob>} CSV file blob
-   */
   exportToCSV: async (reviewId) => {
-    const apiKey = localStorage.getItem("apiKey");
-    const response = await fetch(
-      `${API_BASE_URL}/code-review/${reviewId}/export`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("authToken")}`,
-          "X-API-Key": apiKey,
-        },
+    const url = `${API_BASE_URL}/code-review/${reviewId}/export`;
+    validateUrl(url);
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${tokenManager.getAuthToken()}`,
+        'X-API-Key': tokenManager.getApiKey(),
       },
-    );
-
-    if (!response.ok) throw new Error("Export failed");
-    return await response.blob();
+    });
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
   },
 };
 
 // ==================== Variable Analysis APIs ====================
 
 export const variableAnalysisAPI = {
-  /**
-   * Run variable analysis on workflow
-   * @param {string} workflowId - Workflow ID
-   */
-  runAnalysis: async (workflowId) => {
-    return apiRequest(`/workflows/${workflowId}/variable-analysis`, {
-      method: "POST",
-    });
-  },
-
-  /**
-   * Get variable analysis results
-   * @param {string} workflowId - Workflow ID
-   */
-  getAnalysis: async (workflowId) => {
-    return apiRequest(`/workflows/${workflowId}/variable-analysis`, {
-      method: "GET",
-    });
-  },
+  runAnalysis: (workflowId) => apiRequest(`/workflows/${workflowId}/variable-analysis`, { method: 'POST' }),
+  getAnalysis: (workflowId) => apiRequest(`/workflows/${workflowId}/variable-analysis`),
 };
 
 // ==================== Health Check ====================
 
 export const healthAPI = {
-  /**
-   * Check if backend is running
-   */
-  check: async () => {
-    return apiRequest("/health", {
-      method: "GET",
-    });
-  },
+  check: () => apiRequest('/health'),
 };
 
-// Export default API object
 export default {
   auth: authAPI,
   projects: projectAPI,

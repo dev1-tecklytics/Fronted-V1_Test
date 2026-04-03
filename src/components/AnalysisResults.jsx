@@ -109,9 +109,10 @@ const AnalysisResults = ({ analysisData, onViewDetail, onDelete,
       setSnackbarSeverity("success");
       setOpenSnackbar(true);
       
-      // Call the existing onDelete prop
+      // Call the onDelete prop with the deleted workflowId so the parent
+      // can immediately remove it from state and localStorage cache
       if (onDelete) {
-        onDelete();
+        onDelete(workflowId);
       }
     } catch (error) {
       console.error('Error deleting workflow:', error);

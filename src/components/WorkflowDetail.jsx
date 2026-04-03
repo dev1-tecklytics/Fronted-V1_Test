@@ -26,6 +26,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   Tooltip,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
@@ -43,6 +45,10 @@ import {
   Code as CodeIcon,
   DataUsage as DataIcon,
   CompareArrows as ConvertIcon,
+  Security as SecurityIcon,
+  TableChart as TableChartIcon,
+  BubbleChart as GraphIcon,
+  FiberManualRecord as DotIcon,
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -114,6 +120,18 @@ const SuggestionCard = styled(Card)(({ theme }) => ({
   },
 }));
 
+// Helper to convert **bold** markdown to JSX <strong> elements
+const formatText = (text) => {
+  if (!text) return text;
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+};
+
 const WorkflowDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -146,6 +164,7 @@ const WorkflowDetail = () => {
         };
 
   const [expandedSuggestion, setExpandedSuggestion] = useState(null);
+  const [executionFlowView, setExecutionFlowView] = useState("table");
 
   const handleBack = () => {
     navigate("/workspace");
@@ -552,19 +571,21 @@ const WorkflowDetail = () => {
           </Box>
         </Card>
 
-        {/* Action Buttons */}
+        {/* Action Buttons - DISABLED
         <Card
           sx={{
             p: 3,
             borderRadius: "12px",
             border: "1px solid #f0f0f0",
             mb: 3,
+            opacity: 0.5,
           }}
         >
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
             Analysis Tools
           </Typography>
           <Button
+            disabled
             onClick={() => navigate('/variable-analysis', { state: { workflow: workflowData } })}
             sx={{
               background: "linear-gradient(to right, #9c27b0, #e91e63)",
@@ -573,14 +594,20 @@ const WorkflowDetail = () => {
               borderRadius: "8px",
               px: 3,
               py: 1.5,
+              pointerEvents: "none",
               "&:hover": {
                 background: "linear-gradient(to right, #7b1fa2, #c2185b)",
+              },
+              "&.Mui-disabled": {
+                color: "rgba(255,255,255,0.6)",
+                background: "linear-gradient(to right, #9c27b0, #e91e63)",
               },
             }}
           >
             Variable Analysis
           </Button>
         </Card>
+        */}
 
         {/* Migration Preview */}
         <Card
@@ -924,80 +951,342 @@ const WorkflowDetail = () => {
           ))}
         </Card>
 
-        {/* Gemini LLM Insights */}
+        {/* Technical Assessment Report */}
         {llmInsights && (
-          <Card sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0", mb: 3 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-              <LightbulbIcon sx={{ color: "#9c27b0", fontSize: 28 }} />
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Google Gemini AI Insights
+          <Card
+            sx={{
+              p: 0,
+              borderRadius: "12px",
+              border: "1px solid #e0e0e0",
+              mb: 3,
+              overflow: "hidden",
+            }}
+          >
+            {/* Report Header */}
+            <Box
+              sx={{
+                background: "linear-gradient(135deg, #1a237e 0%, #283593 100%)",
+                p: 3,
+                color: "#ffffff",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <SecurityIcon sx={{ fontSize: 24 }} />
+                <Typography
+                  variant="h6"
+                  sx={{ fontWeight: 700, letterSpacing: "0.5px" }}
+                >
+                  Technical Assessment
+                </Typography>
+              </Box>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "rgba(255,255,255,0.7)",
+                  mt: 0.5,
+                  fontSize: "12px",
+                }}
+              >
+                Workflow Quality & Compliance Report
               </Typography>
             </Box>
-            <Typography variant="body1" sx={{ color: "#424242", mb: 3 }}>
-              {llmInsights.summary}
-            </Typography>
 
+            {/* Executive Summary */}
+            <Box sx={{ p: 3, borderBottom: "1px solid #f0f0f0" }}>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 700,
+                  color: "#212121",
+                  mb: 1.5,
+                  textTransform: "uppercase",
+                  fontSize: "12px",
+                  letterSpacing: "1px",
+                }}
+              >
+                Executive Summary
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "#424242",
+                  lineHeight: 1.8,
+                  fontSize: "14px",
+                }}
+              >
+                {formatText(llmInsights.summary)}
+              </Typography>
+            </Box>
+
+            {/* Risk Assessment */}
             {llmInsights.risks?.length > 0 && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Identified Risks:</Typography>
-                <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                  {llmInsights.risks.map((risk, i) => <li key={i}>{risk}</li>)}
-                </ul>
-              </Alert>
+              <Box sx={{ p: 3, borderBottom: "1px solid #f0f0f0" }}>
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}
+                >
+                  <WarningIcon sx={{ color: "#e65100", fontSize: 20 }} />
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 700,
+                      color: "#212121",
+                      textTransform: "uppercase",
+                      fontSize: "12px",
+                      letterSpacing: "1px",
+                    }}
+                  >
+                    Risk Assessment
+                  </Typography>
+                  <Chip
+                    label={`${llmInsights.risks.length} identified`}
+                    size="small"
+                    sx={{
+                      background: "#fff3e0",
+                      color: "#e65100",
+                      fontWeight: 600,
+                      fontSize: "11px",
+                      height: "22px",
+                    }}
+                  />
+                </Box>
+                <Box
+                  sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
+                >
+                  {llmInsights.risks.map((risk, i) => (
+                    <Box
+                      key={i}
+                      sx={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 1.5,
+                        p: 1.5,
+                        background: "#fffbf5",
+                        borderRadius: "8px",
+                        border: "1px solid #ffe0b2",
+                      }}
+                    >
+                      <Chip
+                        label={`R${i + 1}`}
+                        size="small"
+                        sx={{
+                          background: "#e65100",
+                          color: "#fff",
+                          fontWeight: 700,
+                          fontSize: "11px",
+                          height: "22px",
+                          minWidth: "32px",
+                        }}
+                      />
+                      <Typography
+                        variant="body2"
+                        sx={{ color: "#424242", lineHeight: 1.6 }}
+                      >
+                        {formatText(risk)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
             )}
 
+            {/* Recommended Improvements */}
             {llmInsights.optimizationSuggestions?.length > 0 && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Optimization Suggestions:</Typography>
-                <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                  {llmInsights.optimizationSuggestions.map((opt, i) => <li key={i}>{opt}</li>)}
-                </ul>
-              </Alert>
+              <Box sx={{ p: 3, borderBottom: "1px solid #f0f0f0" }}>
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}
+                >
+                  <BuildIcon sx={{ color: "#1565c0", fontSize: 20 }} />
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 700,
+                      color: "#212121",
+                      textTransform: "uppercase",
+                      fontSize: "12px",
+                      letterSpacing: "1px",
+                    }}
+                  >
+                    Recommended Improvements
+                  </Typography>
+                  <Chip
+                    label={`${llmInsights.optimizationSuggestions.length} items`}
+                    size="small"
+                    sx={{
+                      background: "#e3f2fd",
+                      color: "#1565c0",
+                      fontWeight: 600,
+                      fontSize: "11px",
+                      height: "22px",
+                    }}
+                  />
+                </Box>
+                <Box
+                  sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
+                >
+                  {llmInsights.optimizationSuggestions.map((opt, i) => (
+                    <Box
+                      key={i}
+                      sx={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 1.5,
+                        p: 1.5,
+                        background: "#f8faff",
+                        borderRadius: "8px",
+                        border: "1px solid #bbdefb",
+                      }}
+                    >
+                      <Chip
+                        label={`${i + 1}`}
+                        size="small"
+                        sx={{
+                          background: "#1565c0",
+                          color: "#fff",
+                          fontWeight: 700,
+                          fontSize: "11px",
+                          height: "22px",
+                          minWidth: "24px",
+                        }}
+                      />
+                      <Typography
+                        variant="body2"
+                        sx={{ color: "#424242", lineHeight: 1.6 }}
+                      >
+                        {formatText(opt)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
             )}
 
+            {/* Migration Readiness */}
             {llmInsights.migrationNotes?.length > 0 && (
-              <Alert severity="success">
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Migration Notes:</Typography>
-                <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                  {llmInsights.migrationNotes.map((note, i) => <li key={i}>{note}</li>)}
-                </ul>
-              </Alert>
+              <Box sx={{ p: 3 }}>
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}
+                >
+                  <CheckIcon sx={{ color: "#2e7d32", fontSize: 20 }} />
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 700,
+                      color: "#212121",
+                      textTransform: "uppercase",
+                      fontSize: "12px",
+                      letterSpacing: "1px",
+                    }}
+                  >
+                    Migration Readiness
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
+                >
+                  {llmInsights.migrationNotes.map((note, i) => (
+                    <Box
+                      key={i}
+                      sx={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 1.5,
+                        p: 1.5,
+                        background: "#f1f8e9",
+                        borderRadius: "8px",
+                        border: "1px solid #c5e1a5",
+                      }}
+                    >
+                      <CheckIcon
+                        sx={{ color: "#2e7d32", fontSize: 18, mt: 0.25 }}
+                      />
+                      <Typography
+                        variant="body2"
+                        sx={{ color: "#424242", lineHeight: 1.6 }}
+                      >
+                        {formatText(note)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
             )}
           </Card>
         )}
 
         {/* Variables List */}
         {variablesList.length > 0 && (
-          <Card sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0", mb: 3 }}>
+          <Card
+            sx={{
+              p: 3,
+              borderRadius: "12px",
+              border: "1px solid #f0f0f0",
+              mb: 3,
+            }}
+          >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
               <DataIcon sx={{ color: "#4caf50", fontSize: 28 }} />
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 Variables Catalog
               </Typography>
             </Box>
-            <TableContainer component={Paper} sx={{ boxShadow: "none", border: "1px solid #f0f0f0" }}>
+            <TableContainer
+              component={Paper}
+              sx={{ boxShadow: "none", border: "1px solid #f0f0f0" }}
+            >
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ background: "#fafafa" }}>
-                    <TableCell sx={{ fontWeight: 600 }}>Variable Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      Variable Name
+                    </TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Direction</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Default Value</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      Default Value
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {variablesList.map((row, index) => (
                     <TableRow key={index} hover>
                       <TableCell>
-                        <Typography component="code" sx={{ bgcolor: '#f5f5f5', px: 1, py: 0.5, borderRadius: 1 }}>
+                        <Typography
+                          component="code"
+                          sx={{
+                            bgcolor: "#f5f5f5",
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                          }}
+                        >
                           {row.name}
                         </Typography>
                       </TableCell>
-                      <TableCell><Chip label={row.variableType || 'N/A'} size="small" sx={{ background: "#e8f5e9", color: "#2e7d32", fontWeight: 600 }} /></TableCell>
-                      <TableCell>{row.direction || 'Local'}</TableCell>
                       <TableCell>
-                        <Typography variant="body2" color="textSecondary" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.defaultValue || '-'}>
-                          {row.defaultValue || '-'}
+                        <Chip
+                          label={row.variableType || "N/A"}
+                          size="small"
+                          sx={{
+                            background: "#e8f5e9",
+                            color: "#2e7d32",
+                            fontWeight: 600,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>{row.direction || "Local"}</TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          color="textSecondary"
+                          sx={{
+                            maxWidth: 200,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                          title={row.defaultValue || "-"}
+                        >
+                          {row.defaultValue || "-"}
                         </Typography>
                       </TableCell>
                     </TableRow>
@@ -1010,50 +1299,385 @@ const WorkflowDetail = () => {
 
         {/* Detailed Activities List */}
         {activitiesList.length > 0 && (
-          <Card sx={{ p: 3, borderRadius: "12px", border: "1px solid #f0f0f0", mb: 3 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-              <TreeIcon sx={{ color: "#2196f3", fontSize: 28 }} />
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Detailed Execution Flow (Top 100 Activities)
-              </Typography>
+          <Card
+            sx={{
+              p: 3,
+              borderRadius: "12px",
+              border: "1px solid #f0f0f0",
+              mb: 3,
+            }}
+          >
+            {/* Header with Toggle */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mb: 2,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <TreeIcon sx={{ color: "#2196f3", fontSize: 28 }} />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  Detailed Execution Flow
+                </Typography>
+              </Box>
+              <ToggleButtonGroup
+                value={executionFlowView}
+                exclusive
+                onChange={(e, val) => val && setExecutionFlowView(val)}
+                size="small"
+                sx={{
+                  "& .MuiToggleButton-root": {
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: "13px",
+                    px: 2,
+                    border: "1px solid #e0e0e0",
+                    "&.Mui-selected": {
+                      background: "linear-gradient(135deg, #1a237e 0%, #283593 100%)",
+                      color: "#ffffff",
+                      borderColor: "#1a237e",
+                      "&:hover": {
+                        background: "linear-gradient(135deg, #283593 0%, #3949ab 100%)",
+                      },
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="table">
+                  <TableChartIcon sx={{ fontSize: 18, mr: 0.5 }} />
+                  Table
+                </ToggleButton>
+                <ToggleButton value="graph">
+                  <GraphIcon sx={{ fontSize: 18, mr: 0.5 }} />
+                  Flow Chart
+                </ToggleButton>
+              </ToggleButtonGroup>
             </Box>
-            <TableContainer component={Paper} sx={{ boxShadow: "none", border: "1px solid #f0f0f0", maxHeight: 500 }}>
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>Activity Tree</TableCell>
-                    <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>Component Type</TableCell>
-                    <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>Category</TableCell>
-                    <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>Level</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {activitiesList.slice(0, 100).map((row, index) => (
-                    <TableRow key={index} hover>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', pl: (row.nestedLevel || 0) * 2 }}>
-                          <TreeIcon sx={{ fontSize: 16, mr: 1, color: '#bcbcbc' }} />
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {row.displayName || row.activityType}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell><Chip label={row.activityType || 'N/A'} size="small" variant="outlined" /></TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="textSecondary">{row.activityCategory || 'Other'}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={`Lvl ${row.nestedLevel || 0}`} size="small" sx={{ fontSize: '11px', height: '20px' }} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            {activitiesList.length > 100 && (
-              <Typography variant="caption" sx={{ color: "#757575", display: "block", mt: 1, textAlign: "center" }}>
-                Showing first 100 activities. Total activities: {activitiesList.length}
-              </Typography>
+
+            {/* Table View */}
+            {executionFlowView === "table" && (
+              <>
+                <TableContainer
+                  component={Paper}
+                  sx={{
+                    boxShadow: "none",
+                    border: "1px solid #f0f0f0",
+                    maxHeight: 500,
+                  }}
+                >
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>
+                          Activity Tree
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>
+                          Component Type
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>
+                          Category
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 600, background: "#fafafa" }}>
+                          Level
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {activitiesList.slice(0, 100).map((row, index) => (
+                        <TableRow key={index} hover>
+                          <TableCell>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                pl: (row.nestedLevel || 0) * 2,
+                              }}
+                            >
+                              <TreeIcon
+                                sx={{ fontSize: 16, mr: 1, color: "#bcbcbc" }}
+                              />
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {row.displayName || row.activityType}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={row.activityType || "N/A"}
+                              size="small"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="textSecondary">
+                              {row.activityCategory || "Other"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={`Lvl ${row.nestedLevel || 0}`}
+                              size="small"
+                              sx={{ fontSize: "11px", height: "20px" }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                {activitiesList.length > 100 && (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "#757575",
+                      display: "block",
+                      mt: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    Showing first 100 activities. Total activities:{" "}
+                    {activitiesList.length}
+                  </Typography>
+                )}
+              </>
+            )}
+
+            {/* Graph / Flow Chart View */}
+            {executionFlowView === "graph" && (
+              <Box
+                sx={{
+                  border: "1px solid #f0f0f0",
+                  borderRadius: "8px",
+                  p: 3,
+                  maxHeight: 600,
+                  overflowY: "auto",
+                  background: "#fafbfc",
+                }}
+              >
+                {(() => {
+                  const categoryColors = {
+                    "Control Flow": { bg: "#e3f2fd", border: "#1976d2", text: "#1565c0" },
+                    "Control": { bg: "#e3f2fd", border: "#1976d2", text: "#1565c0" },
+                    "Data Manipulation": { bg: "#e8f5e9", border: "#388e3c", text: "#2e7d32" },
+                    "Data": { bg: "#e8f5e9", border: "#388e3c", text: "#2e7d32" },
+                    "UI Automation": { bg: "#fff3e0", border: "#f57c00", text: "#e65100" },
+                    "UI": { bg: "#fff3e0", border: "#f57c00", text: "#e65100" },
+                    "Excel": { bg: "#f3e5f5", border: "#7b1fa2", text: "#6a1b9a" },
+                    "Workflow": { bg: "#fce4ec", border: "#c62828", text: "#b71c1c" },
+                    "Error Handling": { bg: "#ffebee", border: "#d32f2f", text: "#c62828" },
+                    "Other": { bg: "#f5f5f5", border: "#757575", text: "#616161" },
+                  };
+                  const getColor = (cat) => categoryColors[cat] || categoryColors["Other"];
+                  const items = activitiesList.slice(0, 100);
+
+                  return (
+                    <Box sx={{ position: "relative" }}>
+                      {/* Legend */}
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 1.5,
+                          mb: 3,
+                          p: 2,
+                          background: "#ffffff",
+                          borderRadius: "8px",
+                          border: "1px solid #e0e0e0",
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          sx={{ fontWeight: 700, color: "#757575", mr: 1, alignSelf: "center" }}
+                        >
+                          LEGEND:
+                        </Typography>
+                        {Object.entries(categoryColors).filter(([key]) => 
+                          items.some(a => (a.activityCategory || "Other") === key)
+                        ).map(([cat, colors]) => (
+                          <Box
+                            key={cat}
+                            sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                          >
+                            <DotIcon sx={{ fontSize: 12, color: colors.border }} />
+                            <Typography variant="caption" sx={{ color: "#616161", fontSize: "11px" }}>
+                              {cat}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+
+                      {/* Flow Nodes */}
+                      {items.map((row, index) => {
+                        const color = getColor(row.activityCategory || "Other");
+                        const level = row.nestedLevel || 0;
+                        const nextRow = items[index + 1];
+                        const nextLevel = nextRow ? (nextRow.nestedLevel || 0) : 0;
+                        const isParent = nextRow && nextLevel > level;
+
+                        return (
+                          <Box key={index} sx={{ position: "relative" }}>
+                            {/* Connector Line */}
+                            {index > 0 && (
+                              <Box
+                                sx={{
+                                  position: "absolute",
+                                  left: `${level * 32 + 20}px`,
+                                  top: 0,
+                                  width: "2px",
+                                  height: "8px",
+                                  background: "#bdbdbd",
+                                }}
+                              />
+                            )}
+
+                            {/* Node */}
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                ml: `${level * 32}px`,
+                                mt: index === 0 ? 0 : "8px",
+                                position: "relative",
+                              }}
+                            >
+                              {/* Nesting connector */}
+                              {level > 0 && (
+                                <Box
+                                  sx={{
+                                    position: "absolute",
+                                    left: "-12px",
+                                    top: "50%",
+                                    width: "12px",
+                                    height: "2px",
+                                    background: "#bdbdbd",
+                                  }}
+                                />
+                              )}
+
+                              {/* Node Card */}
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 1.5,
+                                  p: "10px 16px",
+                                  background: color.bg,
+                                  border: `1.5px solid ${color.border}`,
+                                  borderRadius: isParent ? "10px 10px 4px 4px" : "10px",
+                                  flex: 1,
+                                  maxWidth: "600px",
+                                  transition: "all 0.2s ease",
+                                  cursor: "default",
+                                  "&:hover": {
+                                    boxShadow: `0 4px 12px ${color.border}30`,
+                                    transform: "translateX(4px)",
+                                  },
+                                }}
+                              >
+                                {/* Step Number */}
+                                <Box
+                                  sx={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: "50%",
+                                    background: color.border,
+                                    color: "#fff",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {index + 1}
+                                </Box>
+
+                                {/* Activity Info */}
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      fontWeight: 600,
+                                      color: color.text,
+                                      fontSize: "13px",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {row.displayName || row.activityType}
+                                  </Typography>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ color: "#757575", fontSize: "11px" }}
+                                  >
+                                    {row.activityType}
+                                  </Typography>
+                                </Box>
+
+                                {/* Category & Level Chips */}
+                                <Chip
+                                  label={row.activityCategory || "Other"}
+                                  size="small"
+                                  sx={{
+                                    background: "rgba(255,255,255,0.8)",
+                                    border: `1px solid ${color.border}40`,
+                                    fontSize: "10px",
+                                    height: "22px",
+                                    fontWeight: 600,
+                                    color: color.text,
+                                  }}
+                                />
+                                <Chip
+                                  label={`L${level}`}
+                                  size="small"
+                                  sx={{
+                                    background: color.border,
+                                    color: "#fff",
+                                    fontSize: "10px",
+                                    height: "20px",
+                                    fontWeight: 700,
+                                    minWidth: "28px",
+                                  }}
+                                />
+                              </Box>
+                            </Box>
+
+                            {/* Downward connector to next */}
+                            {index < items.length - 1 && (
+                              <Box
+                                sx={{
+                                  ml: `${(isParent ? nextLevel : Math.min(level, nextLevel)) * 32 + 20}px`,
+                                  width: "2px",
+                                  height: "8px",
+                                  background: "#bdbdbd",
+                                }}
+                              />
+                            )}
+                          </Box>
+                        );
+                      })}
+
+                      {activitiesList.length > 100 && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#757575",
+                            display: "block",
+                            mt: 2,
+                            textAlign: "center",
+                          }}
+                        >
+                          Showing first 100 of {activitiesList.length} activities
+                        </Typography>
+                      )}
+                    </Box>
+                  );
+                })()}
+              </Box>
             )}
           </Card>
         )}

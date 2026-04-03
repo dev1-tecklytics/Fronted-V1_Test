@@ -529,8 +529,15 @@ export const analysisAPI = {
 
     // NOTE: Backend currently uses /uipath for both UiPath and Blue Prism mock uploads
     let url = `${API_BASE_URL}/analyze/uipath`;
+    const queryParams = [];
     if (options?.projectId) {
-      url += `?project_id=${options.projectId}`;
+      queryParams.push(`project_id=${options.projectId}`);
+    }
+    if (options?.enableAiAnalysis !== undefined) {
+      queryParams.push(`enable_ai_analysis=${options.enableAiAnalysis}`);
+    }
+    if (queryParams.length > 0) {
+      url += `?${queryParams.join("&")}`;
     }
 
     // PRIORITY: Use JWT (authToken) if available, fallback to apiKey
@@ -735,8 +742,8 @@ export const codeReviewAPI = {
         },
       );
 
-      // Backend returns { message, review } - extract review
-      return response?.review || response;
+      // Backend returns { message, review, aiAnalysis, summary } - return entire response
+      return response;
     } catch (error) {
       // Return null if no cached review found (404)
       if (error.status === 404) {
@@ -782,8 +789,8 @@ export const codeReviewAPI = {
 
     console.log("✅ Code review response:", response);
 
-    // Backend returns { message, review } - extract review
-    return response?.review || response;
+    // Backend returns { message, review, aiAnalysis, summary } - return entire response
+    return response;
   },
 
   /**

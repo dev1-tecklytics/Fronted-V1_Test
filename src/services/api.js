@@ -590,7 +590,7 @@ export const analysisAPI = {
 
       const result = await response.json();
       console.log("✅ Upload successful:", result);
-      
+
       // The backend returns { "success": true, "analysis": { ... } }
       // We need to unwrap the 'analysis' object for the frontend to use it
       return result.analysis || result;

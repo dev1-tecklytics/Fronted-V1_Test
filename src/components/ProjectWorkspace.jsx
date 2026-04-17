@@ -584,9 +584,9 @@ const ProjectWorkspace = () => {
       case "Workflow Analyzer":
         navigate("/workflow-analyzer");
         break;
-      case "UiPath to BluePrism":
-        navigate("/uipath-to-blueprism");
-        break;
+      // case "UiPath to BluePrism": // Temporarily disabled
+      //   navigate("/uipath-to-blueprism");
+      //   break;
       case "Code Review":
         navigate("/code-review");
         break;
@@ -1260,6 +1260,7 @@ const ProjectWorkspace = () => {
           >
             Workflow Analyzer
           </ActionButton>
+          {/* Temporarily disabled: UiPath to BluePrism button
           <ActionButton
             startIcon={<ConvertIcon />}
             bgcolor="#5e6ff2"
@@ -1267,6 +1268,7 @@ const ProjectWorkspace = () => {
           >
             UiPath to BluePrism
           </ActionButton>
+          */}
           <ActionButton
             startIcon={<SecurityIcon />}
             bgcolor="#f44336"

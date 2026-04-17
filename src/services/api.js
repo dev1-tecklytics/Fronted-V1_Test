@@ -2,22 +2,26 @@
  * API Service Layer
  * Handles all HTTP requests to the Python backend
  */
-import { tokenManager } from '../utils/tokenManager';
+import { tokenManager } from "../utils/tokenManager";
 
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api/v1";
 
 // Block requests to AWS metadata and other internal services (SSRF prevention)
-const BLOCKED_HOSTS = ['169.254.169.254', '169.254.170.2', 'metadata.google.internal'];
+const BLOCKED_HOSTS = [
+  "169.254.169.254",
+  "169.254.170.2",
+  "metadata.google.internal",
+];
 
 const validateUrl = (url) => {
   try {
     const parsed = new URL(url);
     if (BLOCKED_HOSTS.includes(parsed.hostname)) {
-      throw new Error('Request to internal metadata service blocked');
+      throw new Error("Request to internal metadata service blocked");
     }
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new Error('Only HTTP/HTTPS protocols are allowed');
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new Error("Only HTTP/HTTPS protocols are allowed");
     }
   } catch (e) {
     throw new Error(`Invalid request URL: ${e.message}`);
@@ -25,7 +29,7 @@ const validateUrl = (url) => {
 };
 
 if (import.meta.env.DEV) {
-  console.log('🌐 API_BASE_URL:', API_BASE_URL);
+  console.log("🌐 API_BASE_URL:", API_BASE_URL);
 }
 
 /**
@@ -39,12 +43,12 @@ const apiRequest = async (endpoint, options = {}) => {
   const apiKey = tokenManager.getApiKey();
 
   const defaultHeaders = {
-    'Content-Type': 'application/json',
-    'X-API-Key': apiKey,
+    "Content-Type": "application/json",
+    "X-API-Key": apiKey,
   };
 
   if (token) {
-    defaultHeaders['Authorization'] = `Bearer ${token}`;
+    defaultHeaders["Authorization"] = `Bearer ${token}`;
   }
 
   const config = {
@@ -58,10 +62,10 @@ const apiRequest = async (endpoint, options = {}) => {
   try {
     const response = await fetch(url, config);
 
-    const contentType = response.headers.get('content-type');
+    const contentType = response.headers.get("content-type");
     let data;
 
-    if (contentType && contentType.includes('application/json')) {
+    if (contentType && contentType.includes("application/json")) {
       data = await response.json();
     } else {
       data = await response.text();
@@ -70,7 +74,7 @@ const apiRequest = async (endpoint, options = {}) => {
     if (!response.ok) {
       throw {
         status: response.status,
-        message: data.message || data.detail || 'An error occurred',
+        message: data.message || data.detail || "An error occurred",
         data: data,
       };
     }
@@ -78,7 +82,7 @@ const apiRequest = async (endpoint, options = {}) => {
     return data;
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.error('API Request Error:', error);
+      console.error("API Request Error:", error);
     }
     throw error;
   }
@@ -88,8 +92,8 @@ const apiRequest = async (endpoint, options = {}) => {
 
 export const authAPI = {
   login: async (credentials) => {
-    const response = await apiRequest('/auth/login', {
-      method: 'POST',
+    const response = await apiRequest("/auth/login", {
+      method: "POST",
       body: JSON.stringify(credentials),
     });
 
@@ -107,8 +111,8 @@ export const authAPI = {
   },
 
   register: async (userData) => {
-    const response = await apiRequest('/auth/register', {
-      method: 'POST',
+    const response = await apiRequest("/auth/register", {
+      method: "POST",
       body: JSON.stringify(userData),
     });
 
@@ -125,14 +129,16 @@ export const authAPI = {
 
   logout: async () => {
     try {
-      await apiRequest('/auth/logout', { method: 'POST' });
+      await apiRequest("/auth/logout", { method: "POST" });
     } finally {
       tokenManager.clear();
     }
   },
 
   refreshToken: async () => {
-    const response = await apiRequest('/auth/refresh-token', { method: 'POST' });
+    const response = await apiRequest("/auth/refresh-token", {
+      method: "POST",
+    });
 
     if (response.access_token) {
       tokenManager.setAuthToken(response.access_token);
@@ -150,11 +156,20 @@ export const authAPI = {
 // ==================== Project APIs ====================
 
 export const projectAPI = {
-  getAll: () => apiRequest('/projects'),
+  getAll: () => apiRequest("/projects"),
   getById: (projectId) => apiRequest(`/projects/${projectId}`),
-  create: (projectData) => apiRequest('/projects', { method: 'POST', body: JSON.stringify(projectData) }),
-  update: (projectId, projectData) => apiRequest(`/projects/${projectId}`, { method: 'PUT', body: JSON.stringify(projectData) }),
-  delete: (projectId) => apiRequest(`/projects/${projectId}`, { method: 'DELETE' }),
+  create: (projectData) =>
+    apiRequest("/projects", {
+      method: "POST",
+      body: JSON.stringify(projectData),
+    }),
+  update: (projectId, projectData) =>
+    apiRequest(`/projects/${projectId}`, {
+      method: "PUT",
+      body: JSON.stringify(projectData),
+    }),
+  delete: (projectId) =>
+    apiRequest(`/projects/${projectId}`, { method: "DELETE" }),
 };
 
 // ==================== Workflow APIs ====================
@@ -162,14 +177,30 @@ export const projectAPI = {
 export const workflowAPI = {
   upload: (projectId, file) => {
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('projectId', projectId);
-    return apiRequest('/workflows/upload', { method: 'POST', headers: {}, body: formData });
+    formData.append("file", file);
+    formData.append("projectId", projectId);
+    return apiRequest("/workflows/upload", {
+      method: "POST",
+      headers: {},
+      body: formData,
+    });
   },
   getByProject: (projectId) => apiRequest(`/workflows?projectId=${projectId}`),
-  analyze: (workflowId, options) => apiRequest(`/workflows/${workflowId}/analyze`, { method: 'POST', body: JSON.stringify(options) }),
-  convert: (workflowId, options) => apiRequest(`/workflows/${workflowId}/convert`, { method: 'POST', body: JSON.stringify(options) }),
-  codeReview: (workflowId, options) => apiRequest(`/workflows/${workflowId}/code-review`, { method: 'POST', body: JSON.stringify(options) }),
+  analyze: (workflowId, options) =>
+    apiRequest(`/workflows/${workflowId}/analyze`, {
+      method: "POST",
+      body: JSON.stringify(options),
+    }),
+  convert: (workflowId, options) =>
+    apiRequest(`/workflows/${workflowId}/convert`, {
+      method: "POST",
+      body: JSON.stringify(options),
+    }),
+  codeReview: (workflowId, options) =>
+    apiRequest(`/workflows/${workflowId}/code-review`, {
+      method: "POST",
+      body: JSON.stringify(options),
+    }),
 };
 
 // ==================== Custom Rules APIs ====================
@@ -178,34 +209,53 @@ export const rulesAPI = {
   getAll: (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') query.append(key, value);
+      if (value !== undefined && value !== null && value !== "")
+        query.append(key, value);
     });
     return apiRequest(`/custom-rules?${query.toString()}`);
   },
 
-  create: (ruleData) => apiRequest('/custom-rules', { method: 'POST', body: JSON.stringify(ruleData) }),
-  update: (ruleId, ruleData) => apiRequest(`/custom-rules/${ruleId}`, { method: 'PATCH', body: JSON.stringify(ruleData) }),
-  delete: (ruleId) => apiRequest(`/custom-rules/${ruleId}`, { method: 'DELETE' }),
-  bulkUpdate: (bulkData) => apiRequest('/custom-rules/bulk', { method: 'PATCH', body: JSON.stringify(bulkData) }),
+  create: (ruleData) =>
+    apiRequest("/custom-rules", {
+      method: "POST",
+      body: JSON.stringify(ruleData),
+    }),
+  update: (ruleId, ruleData) =>
+    apiRequest(`/custom-rules/${ruleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(ruleData),
+    }),
+  delete: (ruleId) =>
+    apiRequest(`/custom-rules/${ruleId}`, { method: "DELETE" }),
+  bulkUpdate: (bulkData) =>
+    apiRequest("/custom-rules/bulk", {
+      method: "PATCH",
+      body: JSON.stringify(bulkData),
+    }),
 
   export: async (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') query.append(key, value);
+      if (value !== undefined && value !== null && value !== "")
+        query.append(key, value);
     });
     const url = `${API_BASE_URL}/custom-rules/export?${query.toString()}`;
     validateUrl(url);
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${tokenManager.getAuthToken()}`,
-        'X-API-Key': tokenManager.getApiKey(),
+        "X-API-Key": tokenManager.getApiKey(),
       },
     });
-    if (!response.ok) throw new Error('Export failed');
+    if (!response.ok) throw new Error("Export failed");
     return response.blob();
   },
 
-  import: (importData) => apiRequest('/custom-rules/import', { method: 'POST', body: JSON.stringify(importData) }),
+  import: (importData) =>
+    apiRequest("/custom-rules/import", {
+      method: "POST",
+      body: JSON.stringify(importData),
+    }),
 };
 
 export const customRulesAPI = rulesAPI;
@@ -219,11 +269,11 @@ export const exportAPI = {
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${tokenManager.getAuthToken()}` },
     });
-    if (!response.ok) throw new Error('Export failed');
+    if (!response.ok) throw new Error("Export failed");
     return response.blob();
   },
 
-  exportProjectsJSON: () => apiRequest('/export/projects/json'),
+  exportProjectsJSON: () => apiRequest("/export/projects/json"),
 
   exportRulesCSV: async () => {
     const url = `${API_BASE_URL}/export/rules/csv`;
@@ -231,30 +281,34 @@ export const exportAPI = {
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${tokenManager.getAuthToken()}` },
     });
-    if (!response.ok) throw new Error('Export failed');
+    if (!response.ok) throw new Error("Export failed");
     return response.blob();
   },
 
-  exportRulesJSON: () => apiRequest('/export/rules/json'),
+  exportRulesJSON: () => apiRequest("/export/rules/json"),
 };
 
 // ==================== Subscription APIs ====================
 
 export const subscriptionAPI = {
-  getPlans: () => apiRequest('/subscription/plans'),
-  getCurrent: () => apiRequest('/subscription/current'),
-  subscribe: (planId) => apiRequest(`/subscription/subscribe?plan_id=${planId}`, { method: 'POST' }),
-  upgrade: (newPlanId) => apiRequest(`/subscription/upgrade?plan_id=${newPlanId}`, { method: 'PUT' }),
-  cancel: () => apiRequest('/subscription/cancel', { method: 'POST' }),
-  getUsage: () => apiRequest('/subscription/usage'),
+  getPlans: () => apiRequest("/subscription/plans"),
+  getCurrent: () => apiRequest("/subscription/current"),
+  subscribe: (planId) =>
+    apiRequest(`/subscription/subscribe?plan_id=${planId}`, { method: "POST" }),
+  upgrade: (newPlanId) =>
+    apiRequest(`/subscription/upgrade?plan_id=${newPlanId}`, { method: "PUT" }),
+  cancel: () => apiRequest("/subscription/cancel", { method: "POST" }),
+  getUsage: () => apiRequest("/subscription/usage"),
 };
 
 // ==================== API Key Management ====================
 
 export const apiKeyAPI = {
-  create: (name = 'Default Key') => apiRequest(`/api_key?name=${encodeURIComponent(name)}`, { method: 'POST' }),
-  list: () => apiRequest('/api_key'),
-  delete: (apiKeyId) => apiRequest(`/api_key/${apiKeyId}`, { method: 'DELETE' }),
+  create: (name = "Default Key") =>
+    apiRequest(`/api_key?name=${encodeURIComponent(name)}`, { method: "POST" }),
+  list: () => apiRequest("/api_key"),
+  delete: (apiKeyId) =>
+    apiRequest(`/api_key/${apiKeyId}`, { method: "DELETE" }),
 };
 
 // ==================== Analysis APIs ====================
@@ -262,13 +316,14 @@ export const apiKeyAPI = {
 export const analysisAPI = {
   uploadAndAnalyze: async (file, options = {}) => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     let url = `${API_BASE_URL}/analyze/uipath`;
     const queryParams = [];
     if (options?.projectId) queryParams.push(`project_id=${options.projectId}`);
-    if (options?.enableAiAnalysis !== undefined) queryParams.push(`enable_ai_analysis=${options.enableAiAnalysis}`);
-    if (queryParams.length > 0) url += `?${queryParams.join('&')}`;
+    if (options?.enableAiAnalysis !== undefined)
+      queryParams.push(`enable_ai_analysis=${options.enableAiAnalysis}`);
+    if (queryParams.length > 0) url += `?${queryParams.join("&")}`;
 
     validateUrl(url);
 
@@ -277,14 +332,16 @@ export const analysisAPI = {
     const authHeaderValue = authToken || apiKey;
 
     if (!authHeaderValue) {
-      throw new Error('Analysis requires a valid session or API Key. Please log in again.');
+      throw new Error(
+        "Analysis requires a valid session or API Key. Please log in again.",
+      );
     }
 
     const response = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
         Authorization: `Bearer ${authHeaderValue}`,
-        'X-API-Key': apiKey,
+        "X-API-Key": apiKey,
       },
       body: formData,
     });
@@ -292,9 +349,18 @@ export const analysisAPI = {
     if (!response.ok) {
       const errorText = await response.text();
       let errorData;
-      try { errorData = JSON.parse(errorText); } catch { errorData = { detail: errorText }; }
-      if (response.status === 401) throw new Error('Authentication failed. Please log in again.');
-      throw new Error(errorData.detail || errorData.message || `Upload failed with status ${response.status}`);
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { detail: errorText };
+      }
+      if (response.status === 401)
+        throw new Error("Authentication failed. Please log in again.");
+      throw new Error(
+        errorData.detail ||
+          errorData.message ||
+          `Upload failed with status ${response.status}`,
+      );
     }
 
     const result = await response.json();
@@ -302,49 +368,79 @@ export const analysisAPI = {
   },
 
   getAnalysisStatus: (analysisId) => apiRequest(`/analyze/${analysisId}`),
-  deleteWorkflow: (workflowId) => apiRequest(`/workflows/${workflowId}`, { method: 'DELETE' }),
-  updateWorkflowName: (workflowId, workflowName) => apiRequest(`/workflows/name?workflow_id=${workflowId}&workflow_name=${workflowName}`, { method: 'PATCH' }),
-  getHistory: (projectId) => apiRequest(`/analyze/history${projectId ? `?project_id=${projectId}` : ''}`),
-  getWorkflowsForProject: (projectId) => apiRequest(`/workflows/project/${projectId ? `?project_id=${projectId}` : ''}`),
-  uploadMultiple: (files, options = {}) => Promise.all(files.map((file) => analysisAPI.uploadAndAnalyze(file, options))),
+  deleteWorkflow: (workflowId) =>
+    apiRequest(`/workflows/${workflowId}`, { method: "DELETE" }),
+  updateWorkflowName: (workflowId, workflowName) =>
+    apiRequest(
+      `/workflows/name?workflow_id=${workflowId}&workflow_name=${workflowName}`,
+      { method: "PATCH" },
+    ),
+  getHistory: (projectId) =>
+    apiRequest(
+      `/analyze/history${projectId ? `?project_id=${projectId}` : ""}`,
+    ),
+  getWorkflowsForProject: (projectId) =>
+    apiRequest(
+      `/workflows/project/${projectId ? `?project_id=${projectId}` : ""}`,
+    ),
+  uploadMultiple: (files, options = {}) =>
+    Promise.all(
+      files.map((file) => analysisAPI.uploadAndAnalyze(file, options)),
+    ),
   getWorkflow: (workflowId) => apiRequest(`/workflows/${workflowId}`),
-  getSuggestions: (workflowId) => apiRequest(`/workflows/${workflowId}/suggestions`),
-  getMigrationPreview: (workflowId) => apiRequest(`/workflows/${workflowId}/migration-preview`),
-  getMigrationStrategy: (workflowId) => apiRequest(`/workflows/${workflowId}/migration-strategy`, { method: 'POST' }),
+  getSuggestions: (workflowId) =>
+    apiRequest(`/workflows/${workflowId}/suggestions`),
+  getMigrationPreview: (workflowId) =>
+    apiRequest(`/workflows/${workflowId}/migration-preview`),
+  getMigrationStrategy: (workflowId) =>
+    apiRequest(`/workflows/${workflowId}/migration-strategy`, {
+      method: "POST",
+    }),
 };
 
 // ==================== Code Review APIs ====================
 
 export const codeReviewAPI = {
   getExistingReview: async (workflowId) => {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(workflowId)) {
-      throw new Error('Invalid workflow ID format. Please select a valid workflow.');
+      throw new Error(
+        "Invalid workflow ID format. Please select a valid workflow.",
+      );
     }
     try {
-      return await apiRequest(`/code-review?workflow_id=${encodeURIComponent(workflowId)}`);
+      return await apiRequest(
+        `/code-review?workflow_id=${encodeURIComponent(workflowId)}`,
+      );
     } catch (error) {
       if (error.status === 404) return null;
       throw error;
     }
   },
 
-  runReview: (reviewData) => apiRequest('/code-review', {
-    method: 'POST',
-    body: JSON.stringify({
-      workflowId: reviewData.workflowId || reviewData.workflow_id,
-      platform: reviewData.platform,
+  runReview: (reviewData) =>
+    apiRequest("/code-review", {
+      method: "POST",
+      body: JSON.stringify({
+        workflowId: reviewData.workflowId || reviewData.workflow_id,
+        platform: reviewData.platform,
+      }),
     }),
-  }),
 
   runAIAnalysis: async (reviewId) => {
-    const response = await apiRequest(`/code-review/${encodeURIComponent(reviewId)}/ai-analysis`, { method: 'POST' });
+    const response = await apiRequest(
+      `/code-review/${encodeURIComponent(reviewId)}/ai-analysis`,
+      { method: "POST" },
+    );
     return response?.analysis || response;
   },
 
   getAIAnalysis: async (reviewId) => {
     try {
-      const response = await apiRequest(`/code-review/ai-analysis?review_id=${encodeURIComponent(reviewId)}`);
+      const response = await apiRequest(
+        `/code-review/ai-analysis?review_id=${encodeURIComponent(reviewId)}`,
+      );
       return response?.analysis || response;
     } catch (error) {
       if (error.status === 404 || error.status === 422) return null;
@@ -352,7 +448,7 @@ export const codeReviewAPI = {
     }
   },
 
-  getAllReviews: () => apiRequest('/code-review/history'),
+  getAllReviews: () => apiRequest("/code-review/history"),
 
   exportToCSV: async (reviewId) => {
     const url = `${API_BASE_URL}/code-review/${reviewId}/export`;
@@ -360,10 +456,10 @@ export const codeReviewAPI = {
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${tokenManager.getAuthToken()}`,
-        'X-API-Key': tokenManager.getApiKey(),
+        "X-API-Key": tokenManager.getApiKey(),
       },
     });
-    if (!response.ok) throw new Error('Export failed');
+    if (!response.ok) throw new Error("Export failed");
     return response.blob();
   },
 };
@@ -371,14 +467,18 @@ export const codeReviewAPI = {
 // ==================== Variable Analysis APIs ====================
 
 export const variableAnalysisAPI = {
-  runAnalysis: (workflowId) => apiRequest(`/workflows/${workflowId}/variable-analysis`, { method: 'POST' }),
-  getAnalysis: (workflowId) => apiRequest(`/workflows/${workflowId}/variable-analysis`),
+  runAnalysis: (workflowId) =>
+    apiRequest(`/workflows/${workflowId}/variable-analysis`, {
+      method: "POST",
+    }),
+  getAnalysis: (workflowId) =>
+    apiRequest(`/workflows/${workflowId}/variable-analysis`),
 };
 
 // ==================== Health Check ====================
 
 export const healthAPI = {
-  check: () => apiRequest('/health'),
+  check: () => apiRequest("/health"),
 };
 
 export default {

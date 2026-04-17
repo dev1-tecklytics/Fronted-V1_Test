@@ -7,7 +7,7 @@ import Signup from './components/Signup';
 import Dashboard from './components/Dashboard';
 import ProjectWorkspace from './components/ProjectWorkspace';
 import WorkflowAnalyzer from './components/WorkflowAnalyzer';
-import UiPathToBluePrism from './components/UiPathToBluePrism';
+// import UiPathToBluePrism from './components/UiPathToBluePrism'; // Temporarily disabled
 import CodeReviewTool from './components/CodeReviewTool';
 import CustomRules from './components/CustomRules';
 import PricingPage from './components/PricingPage';
@@ -68,7 +68,7 @@ function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/workspace" element={<ProtectedRoute><ProjectWorkspace /></ProtectedRoute>} />
           <Route path="/workflow-analyzer" element={<ProtectedRoute><WorkflowAnalyzer /></ProtectedRoute>} />
-          <Route path="/uipath-to-blueprism" element={<ProtectedRoute><UiPathToBluePrism /></ProtectedRoute>} />
+          {/* <Route path="/uipath-to-blueprism" element={<ProtectedRoute><UiPathToBluePrism /></ProtectedRoute>} /> */} {/* Temporarily disabled */}
           <Route path="/code-review" element={<ProtectedRoute><CodeReviewTool /></ProtectedRoute>} />
           <Route path="/custom-rules" element={<ProtectedRoute><CustomRules /></ProtectedRoute>} />
           <Route path="/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />

@@ -348,9 +348,9 @@ const Dashboard = () => {
             case 'Code Review':
                 navigate('/code-review');
                 break;
-            case 'UiPath to BluePrism Converter':
-                navigate('/uipath-to-blueprism');
-                break;
+            // case 'UiPath to BluePrism Converter': // Temporarily disabled
+            //     navigate('/uipath-to-blueprism');
+            //     break;
             default:
                 setSnackbarMessage(`🚀 ${feature} feature coming soon!`);
                 setOpenSnackbar(true);
@@ -718,7 +718,7 @@ const Dashboard = () => {
                         </Typography>
                     </FeatureCard>
 
-                    {/* UiPath to BluePrism Converter */}
+                    {/* Temporarily disabled: UiPath to BluePrism Converter card
                     <FeatureCard onClick={() => handleFeatureClick('UiPath to BluePrism Converter')}>
                         <FeatureIconWrapper sx={{ background: 'rgba(33, 150, 243, 0.1)' }}>
                             <ConvertIcon sx={{ color: '#2196f3', fontSize: 24 }} />
@@ -730,6 +730,7 @@ const Dashboard = () => {
                             Convert UiPath workflows to BluePrism format with detailed compatibility analysis and warnings
                         </Typography>
                     </FeatureCard>
+                    */}
                 </Box>
             </Container>
 
